@@ -1,85 +1,337 @@
 {% extends "base.html" %}
-{% block title %}Room Allocation{% endblock %}
+{% block title %}Room & Bed Vacancies - Smart Hostel{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h4><i class="bi bi-door-open"></i> Room Allocation</h4>
-  {% if current_user.role == 'admin' %}
-    <a href="{{ url_for('admin_add_room') }}" class="btn btn-sm btn-primary">+ Add Room</a>
-  {% endif %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <div>
+    <h4 class="mb-0 fw-bold"><i class="bi bi-door-open-fill text-primary"></i> Room & Bed Vacancy Management</h4>
+    <p class="text-muted small mb-0">Real-time bed-level occupancy tracking and 1-click bed vacancy management</p>
+  </div>
+  <div class="d-flex gap-2">
+    {% if current_user.role == 'admin' %}
+      <a href="{{ url_for('admin_add_room') }}" class="btn btn-sm btn-primary">
+        <i class="bi bi-plus-circle me-1"></i> Add Room
+      </a>
+    {% endif %}
+  </div>
 </div>
 
+<!-- Vacancy Overview Statistics -->
+{% set total_rooms = rooms|length %}
+{% set total_capacity = rooms|sum(attribute='capacity') %}
+{% set total_occupied = rooms|sum(attribute='occupied_count') %}
+{% set total_vacant = rooms|sum(attribute='available_beds') %}
+
 <div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card p-3 border-0 shadow-sm bg-white border-start border-4 border-primary">
+      <div class="small text-muted text-uppercase fw-semibold">Total Rooms</div>
+      <div class="fs-4 fw-bold text-dark mt-1">{{ total_rooms }}</div>
+      <div class="small text-muted">{{ total_capacity }} total bed capacity</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 border-0 shadow-sm bg-white border-start border-4 border-danger">
+      <div class="small text-muted text-uppercase fw-semibold">Occupied Beds</div>
+      <div class="fs-4 fw-bold text-danger mt-1">{{ total_occupied }}</div>
+      <div class="small text-muted">Active hostel residents</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 border-0 shadow-sm bg-white border-start border-4 border-success">
+      <div class="small text-muted text-uppercase fw-semibold">Vacant / Empty Beds</div>
+      <div class="fs-4 fw-bold text-success mt-1">
+        <i class="bi bi-check2-circle me-1"></i>{{ total_vacant }}
+      </div>
+      <div class="small text-success fw-semibold">Available for immediate allocation</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 border-0 shadow-sm bg-white border-start border-4 border-info">
+      <div class="small text-muted text-uppercase fw-semibold">Occupancy Rate</div>
+      <div class="fs-4 fw-bold text-info mt-1">
+        {% if total_capacity > 0 %}
+          {{ ((total_occupied / total_capacity) * 100)|round(1) }}%
+        {% else %}
+          0%
+        {% endif %}
+      </div>
+      <div class="progress mt-2" style="height: 6px;">
+        <div class="progress-bar bg-info" style="width: {{ ((total_occupied / total_capacity) * 100) if total_capacity > 0 else 0 }}%"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Search & Vacancy Filter Bar -->
+<div class="card p-3 border-0 shadow-sm mb-4">
+  <div class="row g-2 align-items-center">
+    <div class="col-md-5">
+      <div class="input-group">
+        <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+        <input type="text" id="roomSearchInput" class="form-control border-start-0" placeholder="Search room (e.g. 102), block, or resident name..." oninput="filterRooms()">
+      </div>
+    </div>
+    <div class="col-md-7 d-flex justify-content-md-end gap-2 flex-wrap">
+      <button type="button" class="btn btn-sm btn-outline-secondary active filter-btn" data-filter="all" onclick="setRoomFilter('all', this)">
+        All Rooms ({{ total_rooms }})
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-success filter-btn" data-filter="vacant" onclick="setRoomFilter('vacant', this)">
+        <i class="bi bi-check-circle me-1"></i> Rooms with Vacant Beds
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-danger filter-btn" data-filter="full" onclick="setRoomFilter('full', this)">
+        <i class="bi bi-x-circle me-1"></i> Full Rooms
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Room Cards Grid with Bed Vacancies -->
+<div class="row g-3 mb-4" id="roomsContainer">
   {% for r in rooms %}
-    <div class="col-md-4 col-6">
-      <div class="card p-3">
-        <div class="d-flex justify-content-between">
-          <strong>{{ r.room_number }}</strong>
-          <span class="badge {{ 'bg-danger' if r.available_beds==0 else 'bg-success' }}">
-            {{ r.available_beds }} free
-          </span>
+    {% set beds = r.get_beds_status() %}
+    <div class="col-lg-6 col-12 room-card-wrapper" 
+         data-room="{{ r.room_number }}" 
+         data-block="{{ r.block }}"
+         data-vacant="{{ 'true' if r.available_beds > 0 else 'false' }}"
+         data-residents="{% for b in beds %}{% if not b.is_empty %}{{ b.student_name|lower }} {{ b.student_code|lower }} {% endif %}{% endfor %}">
+      <div class="card h-100 border-0 shadow-sm rounded-3">
+        <!-- Room Card Header -->
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+          <div>
+            <span class="fs-5 fw-bold text-dark me-2">Room {{ r.room_number }}</span>
+            <span class="badge bg-light text-secondary border">Block {{ r.block }} &bull; Floor {{ r.floor }}</span>
+            <span class="badge bg-light text-muted border text-capitalize">{{ r.gender }}</span>
+          </div>
+          <div>
+            {% if r.available_beds > 0 %}
+              <span class="badge bg-success-subtle text-success border border-success fw-semibold px-2 py-1">
+                <i class="bi bi-check-circle-fill me-1"></i> {{ r.available_beds }} / {{ r.capacity }} Beds Vacant
+              </span>
+            {% else %}
+              <span class="badge bg-danger-subtle text-danger border border-danger fw-semibold px-2 py-1">
+                <i class="bi bi-x-circle-fill me-1"></i> 0 Beds Vacant (Full)
+              </span>
+            {% endif %}
+          </div>
         </div>
-        <div class="small text-muted">Block {{ r.block }} · Floor {{ r.floor }} · {{ r.gender }}</div>
-        <div class="progress mt-2" style="height:8px;">
-          <div class="progress-bar" style="width: {{ (r.occupied_count / r.capacity * 100) if r.capacity else 0 }}%"></div>
+
+        <!-- Room Bed Matrix Body -->
+        <div class="card-body p-3">
+          <div class="small text-muted fw-semibold mb-2">
+            <i class="bi bi-grid-fill me-1"></i> Bed Status & Vacancy Layout:
+          </div>
+
+          <div class="row g-2">
+            {% for b in beds %}
+              <div class="col-sm-6 col-12">
+                {% if b.is_empty %}
+                  <!-- EMPTY / VACANT BED CARD -->
+                  <div class="p-2 rounded-3 border border-2 border-success h-100 d-flex flex-column justify-content-between" 
+                       style="background-color: rgba(25, 135, 84, 0.08);">
+                    <div>
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="text-success" style="font-size:0.95rem;">
+                          <i class="bi bi-square me-1"></i> Bed {{ b.bed_number }}
+                        </strong>
+                        <span class="badge bg-success text-white" style="font-size:0.75rem;">
+                          <i class="bi bi-check-circle me-1"></i> EMPTY / VACANT
+                        </span>
+                      </div>
+                      <div class="small text-success fw-medium">
+                        <i class="bi bi-door-open me-1"></i> Available for allocation
+                      </div>
+                    </div>
+
+                    {% if unassigned %}
+                      <div class="mt-2 pt-2 border-top border-success border-opacity-25 text-end">
+                        <button type="button" class="btn btn-xs btn-outline-success py-1 px-2" style="font-size:0.75rem;"
+                                onclick="prefillAllocation('{{ r.id }}', '{{ b.bed_number }}', '{{ r.room_number }}')">
+                          <i class="bi bi-plus-circle me-1"></i> Assign to Bed {{ b.bed_number }}
+                        </button>
+                      </div>
+                    {% endif %}
+                  </div>
+                {% else %}
+                  <!-- OCCUPIED BED CARD WITH 1-CLICK VACATE -->
+                  <div class="p-2 rounded-3 border border-danger border-opacity-25 h-100 d-flex flex-column justify-content-between bg-white shadow-xs">
+                    <div>
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="text-dark" style="font-size:0.95rem;">
+                          <i class="bi bi-person-fill text-danger me-1"></i> Bed {{ b.bed_number }}
+                        </strong>
+                        <span class="badge bg-secondary" style="font-size:0.75rem;">
+                          <i class="bi bi-lock-fill me-1"></i> Occupied
+                        </span>
+                      </div>
+                      <div class="fw-bold text-dark text-truncate" title="{{ b.student_name }}">
+                        {{ b.student_name }}
+                      </div>
+                      <div class="small text-muted font-monospace">
+                        ID: {{ b.student_code }}
+                      </div>
+                    </div>
+
+                    <!-- 1-Click Vacate Bed Action -->
+                    <form method="POST" action="{{ url_for('warden_vacate_bed', student_id=b.student_id) }}" class="mt-2 pt-2 border-top"
+                          onsubmit="return confirm('Are you sure you want to mark Bed {{ b.bed_number }} in Room {{ r.room_number }} as VACANT? This will unassign {{ b.student_name }}.');">
+                      <button type="submit" class="btn btn-xs btn-outline-danger w-100 py-1" style="font-size:0.75rem;">
+                        <i class="bi bi-box-arrow-right me-1"></i> Vacate Bed {{ b.bed_number }}
+                      </button>
+                    </form>
+                  </div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
         </div>
-        <div class="small mt-1">{{ r.occupied_count }} / {{ r.capacity }} occupied</div>
+
+        <!-- Room Progress Bar Footer -->
+        <div class="card-footer bg-light py-2 px-3 border-top d-flex justify-content-between align-items-center">
+          <div class="small text-muted">
+            {{ r.occupied_count }} of {{ r.capacity }} beds occupied
+          </div>
+          <div style="width: 100px;">
+            <div class="progress" style="height: 6px;">
+              <div class="progress-bar {{ 'bg-danger' if r.available_beds==0 else 'bg-success' }}"
+                   style="width: {{ (r.occupied_count / r.capacity * 100) if r.capacity else 0 }}%"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   {% endfor %}
 </div>
 
-<div class="card p-3">
-  <h5><i class="bi bi-person-plus"></i> Allocate Room to Unassigned Student</h5>
+<!-- Bed Allocation Section -->
+<div class="card p-4 border-0 shadow-sm rounded-3" id="allocationSection">
+  <h5 class="fw-bold mb-1">
+    <i class="bi bi-person-plus-fill text-primary me-1"></i> Allocate Vacant Bed to Unassigned Student
+  </h5>
+  <p class="text-muted small mb-3">Assign pending residents directly to a vacant bed in any active room.</p>
+
   {% if unassigned %}
-  <form method="POST" action="{{ url_for('warden_allocate_room') }}" class="row g-2 align-items-end" id="allocForm">
+  <form method="POST" action="{{ url_for('warden_allocate_room') }}" class="row g-3 align-items-end" id="allocForm">
     <div class="col-md-4">
-      <label class="form-label small">Student</label>
+      <label class="form-label fw-semibold small">Unassigned Student</label>
       <select name="student_id" id="studentSelect" class="form-select" required>
         {% for s in unassigned %}
           <option value="{{ s.id }}" data-gender="{{ s.gender }}">{{ s.user.full_name }} ({{ s.student_code }})</option>
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-4">
-      <label class="form-label small">Room</label>
-      <select name="room_id" id="roomSelect" class="form-select" required>
+
+    <div class="col-md-3">
+      <label class="form-label fw-semibold small">Target Room</label>
+      <select name="room_id" id="roomSelect" class="form-select" required onchange="updateBedDropdown(this)">
+        <option value="" disabled selected>-- Select Room --</option>
         {% for r in rooms %}
-          <option value="{{ r.id }}" {{ 'disabled' if r.available_beds==0 else '' }}>
-            {{ r.room_number }} ({{ r.available_beds }} free, {{ r.gender }})
+          <option value="{{ r.id }}" data-roomnum="{{ r.room_number }}" {{ 'disabled' if r.available_beds==0 else '' }}>
+            Room {{ r.room_number }} ({{ r.available_beds }} beds free &bull; Block {{ r.block }})
           </option>
         {% endfor %}
       </select>
     </div>
+
     <div class="col-md-2">
-      <button type="button" id="recommendBtn" class="btn btn-outline-secondary w-100">
-        <i class="bi bi-magic"></i> Recommend
-      </button>
+      <label class="form-label fw-semibold small">Bed Number</label>
+      <select name="bed_number" id="bedSelect" class="form-select">
+        <option value="">Auto (Next Empty)</option>
+        <option value="1">Bed 1</option>
+        <option value="2">Bed 2</option>
+        <option value="3">Bed 3</option>
+        <option value="4">Bed 4</option>
+      </select>
     </div>
-    <div class="col-md-2">
-      <button type="submit" class="btn btn-primary w-100">Allocate</button>
+
+    <div class="col-md-3 d-flex gap-2">
+      <button type="button" id="recommendBtn" class="btn btn-outline-secondary w-50">
+        <i class="bi bi-magic"></i> Auto-Fit
+      </button>
+      <button type="submit" class="btn btn-primary w-50 fw-semibold">
+        <i class="bi bi-check2 me-1"></i> Allocate
+      </button>
     </div>
   </form>
   <div id="recommendResult" class="small text-muted mt-2"></div>
   {% else %}
-    <p class="text-muted mb-0">All students have been allocated a room.</p>
+    <div class="alert alert-success mb-0 py-2 px-3 small">
+      <i class="bi bi-check-circle-fill me-1"></i> All enrolled students currently have assigned rooms and beds.
+    </div>
   {% endif %}
 </div>
 {% endblock %}
+
 {% block scripts %}
 <script>
-document.getElementById('recommendBtn')?.addEventListener('click', () => {
-  const studentId = document.getElementById('studentSelect').value;
-  fetch(`/warden/rooms/recommend/${studentId}`)
-    .then(r => r.json())
-    .then(data => {
-      const resultDiv = document.getElementById('recommendResult');
-      if (data.recommended) {
-        document.getElementById('roomSelect').value = data.recommended.id;
-        resultDiv.innerHTML = `<i class="bi bi-check-circle text-success"></i> Recommended: Room ${data.recommended.room_number} (${data.recommended.available} beds free)`;
-      } else {
-        resultDiv.innerHTML = `<i class="bi bi-exclamation-triangle text-warning"></i> No suitable room found.`;
+  let currentFilter = 'all';
+
+  function setRoomFilter(filter, btn) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterRooms();
+  }
+
+  function filterRooms() {
+    const query = document.getElementById('roomSearchInput').value.trim().toLowerCase();
+    const cards = document.querySelectorAll('.room-card-wrapper');
+
+    cards.forEach(card => {
+      const roomNum = card.dataset.room.toLowerCase();
+      const block = card.dataset.block.toLowerCase();
+      const residents = card.dataset.residents.toLowerCase();
+      const isVacant = card.dataset.vacant === 'true';
+
+      let matchesFilter = true;
+      if (currentFilter === 'vacant') {
+        matchesFilter = isVacant;
+      } else if (currentFilter === 'full') {
+        matchesFilter = !isVacant;
       }
+
+      let matchesSearch = true;
+      if (query) {
+        matchesSearch = roomNum.includes(query) || block.includes(query) || residents.includes(query);
+      }
+
+      card.style.display = (matchesFilter && matchesSearch) ? 'block' : 'none';
     });
-});
+  }
+
+  function prefillAllocation(roomId, bedNum, roomNum) {
+    const section = document.getElementById('allocationSection');
+    const roomSelect = document.getElementById('roomSelect');
+    const bedSelect = document.getElementById('bedSelect');
+
+    if (roomSelect) {
+      roomSelect.value = roomId;
+    }
+    if (bedSelect && bedNum) {
+      bedSelect.value = bedNum;
+    }
+
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth' });
+      section.classList.add('border-primary');
+      setTimeout(() => section.classList.remove('border-primary'), 2000);
+    }
+  }
+
+  document.getElementById('recommendBtn')?.addEventListener('click', () => {
+    const studentSelect = document.getElementById('studentSelect');
+    if (!studentSelect) return;
+    const studentId = studentSelect.value;
+    fetch(`/warden/rooms/recommend/${studentId}`)
+      .then(r => r.json())
+      .then(data => {
+        const resultDiv = document.getElementById('recommendResult');
+        if (data.recommended) {
+          document.getElementById('roomSelect').value = data.recommended.id;
+          resultDiv.innerHTML = `<i class="bi bi-check-circle-fill text-success"></i> Recommended: Room ${data.recommended.room_number} (${data.recommended.available} beds free)`;
+        } else {
+          resultDiv.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-warning"></i> No suitable room found.`;
+        }
+      });
+  });
 </script>
 {% endblock %}

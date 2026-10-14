@@ -48,6 +48,45 @@ class Room(db.Model):
     def available_beds(self):
         return max(self.capacity - self.occupied_count, 0)
 
+    def get_beds_status(self):
+        """Returns individual bed status (Bed 1 .. capacity) showing whether each bed is occupied or empty/vacant."""
+        occupied_beds = {s.bed_number: s for s in self.students if s.bed_number is not None}
+        unassigned_students = [s for s in self.students if s.bed_number is None]
+
+        beds = []
+        for b in range(1, self.capacity + 1):
+            if b in occupied_beds:
+                st = occupied_beds[b]
+                beds.append({
+                    "bed_number": b,
+                    "is_empty": False,
+                    "student": st,
+                    "student_name": st.user.full_name,
+                    "student_code": st.student_code,
+                    "student_id": st.id,
+                })
+            elif unassigned_students:
+                st = unassigned_students.pop(0)
+                st.bed_number = b
+                beds.append({
+                    "bed_number": b,
+                    "is_empty": False,
+                    "student": st,
+                    "student_name": st.user.full_name,
+                    "student_code": st.student_code,
+                    "student_id": st.id,
+                })
+            else:
+                beds.append({
+                    "bed_number": b,
+                    "is_empty": True,
+                    "student": None,
+                    "student_name": "Vacant / Empty",
+                    "student_code": None,
+                    "student_id": None,
+                })
+        return beds
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -59,6 +98,7 @@ class Room(db.Model):
             "available": self.available_beds,
             "gender": self.gender,
             "status": self.status,
+            "beds": self.get_beds_status(),
         }
 
 
@@ -72,6 +112,7 @@ class Student(db.Model):
     year = db.Column(db.Integer)
     gender = db.Column(db.String(10), default="any")
     room_id = db.Column(db.Integer, db.ForeignKey("rooms.id"), nullable=True)
+    bed_number = db.Column(db.Integer, nullable=True)
 
     # --- Anti-Proxy Verifications ---
     trusted_device_id = db.Column(db.String(120), nullable=True)

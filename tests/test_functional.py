@@ -267,5 +267,131 @@ class TestFunctionalSuite(unittest.TestCase):
         self.assertEqual(res.json["config"]["radius_meters"], 200.0)
         self.client.get("/logout")
 
+    def test_tc_f11_resident_registration_without_roll_no_dept_sem(self):
+        """TC-F11: Resident registration without roll number, department, semester (auto-generated ID & bed)."""
+        room = [r for r in Room.query.all() if r.available_beds > 0][0]
+        test_uname = "streamlined_resident_01"
+        u = User.query.filter_by(username=test_uname).first()
+        if u:
+            Student.query.filter_by(user_id=u.id).delete()
+            db.session.delete(u)
+            db.session.commit()
+
+        payload = {
+            "account_type": "student",
+            "registration_code": "HOSTEL2026",
+            "full_name": "Streamlined Resident",
+            "gender": "female",
+            "room_id": str(room.id),
+            "enrolled_face": "data:image/jpeg;base64," + ("B" * 100),
+            "username": test_uname,
+            "password": "password123",
+            "confirm_password": "password123",
+        }
+        res = self.client.post("/register", data=payload, follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+
+        # Verify resident created with auto student_code and assigned bed
+        created_user = User.query.filter_by(username=test_uname).first()
+        self.assertIsNotNone(created_user)
+        self.assertEqual(created_user.role, "student")
+        st = created_user.student_profile
+        self.assertIsNotNone(st)
+        self.assertTrue(st.student_code.startswith("RES"))
+        self.assertEqual(st.department, "General")
+        self.assertEqual(st.year, 1)
+        self.assertEqual(st.room_id, room.id)
+        self.assertIsNotNone(st.bed_number)
+        self.assertTrue(1 <= st.bed_number <= room.capacity)
+
+    def test_tc_f12_staff_warden_and_admin_registration(self):
+        """TC-F12: Warden and Admin staff registration using authorization codes."""
+        # Clean up test accounts if present
+        for uname in ["new_test_warden", "new_test_admin"]:
+            u = User.query.filter_by(username=uname).first()
+            if u:
+                db.session.delete(u)
+        db.session.commit()
+
+        # 1. Warden Registration with WARDEN2026
+        warden_payload = {
+            "account_type": "warden",
+            "registration_code": "WARDEN2026",
+            "full_name": "Test Floor Warden",
+            "username": "new_test_warden",
+            "password": "wardenpass123",
+            "confirm_password": "wardenpass123",
+        }
+        res = self.client.post("/register", data=warden_payload, follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+        warden_user = User.query.filter_by(username="new_test_warden").first()
+        self.assertIsNotNone(warden_user)
+        self.assertEqual(warden_user.role, "warden")
+
+        # 2. Admin Registration with ADMIN2026
+        admin_payload = {
+            "account_type": "admin",
+            "registration_code": "ADMIN2026",
+            "full_name": "Test System Administrator",
+            "username": "new_test_admin",
+            "password": "adminpass123",
+            "confirm_password": "adminpass123",
+        }
+        res = self.client.post("/register", data=admin_payload, follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+        admin_user = User.query.filter_by(username="new_test_admin").first()
+        self.assertIsNotNone(admin_user)
+        self.assertEqual(admin_user.role, "admin")
+
+        # 3. Invalid code rejection
+        bad_payload = {
+            "account_type": "admin",
+            "registration_code": "WRONG_CODE",
+            "full_name": "Bad Admin",
+            "username": "bad_admin",
+            "password": "password123",
+            "confirm_password": "password123",
+        }
+        res = self.client.post("/register", data=bad_payload)
+        self.assertIsNone(User.query.filter_by(username="bad_admin").first())
+
+    def test_tc_f13_bed_level_vacancy_viewing_and_vacating(self):
+        """TC-F13: Viewing room vacancies and vacating a specific bed (marking it empty)."""
+        # Ensure there is a room with an assigned student
+        student = Student.query.filter(Student.room_id != None).first()
+        self.assertIsNotNone(student)
+        room = student.room
+        old_bed_num = student.bed_number
+
+        # Login as warden
+        self.client.post("/login", data={"username": "warden", "password": "warden123"})
+        res = self.client.get("/warden/rooms")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"Room & Bed Vacancy Management", res.data)
+        self.assertIn(b"EMPTY / VACANT", res.data)
+
+        # Vacate the student's bed
+        vacate_res = self.client.post(f"/warden/rooms/vacate/{student.id}", follow_redirects=True)
+        self.assertEqual(vacate_res.status_code, 200)
+
+        # Verify bed is vacated and marked empty in DB and get_beds_status
+        db.session.refresh(student)
+        self.assertIsNone(student.room_id)
+        self.assertIsNone(student.bed_number)
+
+        beds_status = room.get_beds_status()
+        vacated_bed_status = next(b for b in beds_status if b["bed_number"] == old_bed_num)
+        self.assertTrue(vacated_bed_status["is_empty"])
+        self.assertIsNone(vacated_bed_status["student_id"])
+
+        # Clean up: re-allocate student back to the room
+        self.client.post("/warden/rooms/allocate", data={
+            "student_id": str(student.id),
+            "room_id": str(room.id),
+            "bed_number": str(old_bed_num),
+        }, follow_redirects=True)
+        self.client.get("/logout")
+
 if __name__ == "__main__":
     unittest.main()
+

@@ -76,6 +76,7 @@ def create_app():
                     "ALTER TABLE students ADD COLUMN trusted_device_name VARCHAR(120)",
                     "ALTER TABLE students ADD COLUMN enrolled_face_image TEXT",
                     "ALTER TABLE students ADD COLUMN hostel_location VARCHAR(120)",
+                    "ALTER TABLE students ADD COLUMN bed_number INTEGER",
                     "ALTER TABLE attendance ADD COLUMN verification_status VARCHAR(80) DEFAULT 'Verified'",
                     "ALTER TABLE attendance ADD COLUMN device_id VARCHAR(120)",
                     "ALTER TABLE attendance ADD COLUMN device_name VARCHAR(120)",
@@ -92,6 +93,18 @@ def create_app():
                         pass
         except Exception:
             pass
+
+        try:
+            for room in Room.query.all():
+                taken = {s.bed_number for s in room.students if s.bed_number is not None}
+                for s in room.students:
+                    if s.bed_number is None:
+                        free_b = next((b for b in range(1, room.capacity + 1) if b not in taken), 1)
+                        s.bed_number = free_b
+                        taken.add(free_b)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
     @app.after_request
     def set_security_headers(response):
@@ -265,44 +278,84 @@ def create_app():
         if current_user.is_authenticated:
             return redirect_to_dashboard()
 
-        # Authorized member registration code (default: HOSTEL2026, can also be configured via HOSTEL_REGISTRATION_CODE)
-        valid_codes = {"HOSTEL2026", "SHMS2026"}
+        # Authorized member registration codes
+        valid_resident_codes = {"HOSTEL2026", "SHMS2026"}
         custom_code = os.environ.get("HOSTEL_REGISTRATION_CODE")
         if custom_code:
-            valid_codes.add(custom_code.strip().upper())
+            valid_resident_codes.add(custom_code.strip().upper())
+
+        valid_warden_codes = {"WARDEN2026", "STAFF2026", "ADMIN2026"}
+        custom_warden = os.environ.get("WARDEN_REGISTRATION_CODE")
+        if custom_warden:
+            valid_warden_codes.add(custom_warden.strip().upper())
+
+        valid_admin_codes = {"ADMIN2026"}
+        custom_admin = os.environ.get("ADMIN_REGISTRATION_CODE")
+        if custom_admin:
+            valid_admin_codes.add(custom_admin.strip().upper())
 
         rooms = Room.query.order_by(Room.block, Room.room_number).all()
 
         if request.method == "POST":
+            account_type = request.form.get("account_type", "student").strip().lower()
             reg_code = request.form.get("registration_code", "").strip().upper()
             full_name = request.form.get("full_name", "").strip()
-            student_code = request.form.get("student_code", "").strip().upper()
-            department = request.form.get("department", "").strip()
-            year = int(request.form.get("year") or 1)
-            gender = request.form.get("gender", "female").strip().lower()
-            room_id = request.form.get("room_id", "").strip()
-            room_number = request.form.get("room_number", "").strip()
-            enrolled_face = request.form.get("enrolled_face", "").strip()
-            hostel_location = request.form.get("hostel_location_name", "").strip() or request.form.get("hostel_location", "").strip() or HOSTEL_CONFIG.get("name", "Main Campus Hostel Gate")
-            hostel_lat = request.form.get("hostel_lat", "").strip()
-            hostel_lon = request.form.get("hostel_lon", "").strip()
             email = request.form.get("email", "").strip()
             phone = request.form.get("phone", "").strip()
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "")
             confirm_password = request.form.get("confirm_password", "")
 
+            # 1. Constraint: Password length & confirmation
+            if len(password) < 6:
+                flash("Password must be at least 6 characters long.", "warning")
+                return render_template("register.html", rooms=rooms, hostel_config=HOSTEL_CONFIG)
+
+            if password != confirm_password:
+                flash("Passwords do not match. Please verify and try again.", "warning")
+                return render_template("register.html", rooms=rooms, hostel_config=HOSTEL_CONFIG)
+
+            # 2. Constraint: Check username uniqueness
+            if User.query.filter_by(username=username).first():
+                flash("This username is already taken. Please choose another.", "warning")
+                return render_template("register.html", rooms=rooms, hostel_config=HOSTEL_CONFIG)
+
+            # ---------------- STAFF REGISTRATION (WARDEN / ADMIN) ----------------
+            if account_type in ["warden", "admin"]:
+                allowed_codes = valid_admin_codes if account_type == "admin" else valid_warden_codes
+                if reg_code not in allowed_codes:
+                    flash(f"Invalid staff authorization code for {account_type.capitalize()} registration. Please provide the authorized code.", "danger")
+                    return render_template("register.html", rooms=rooms, hostel_config=HOSTEL_CONFIG)
+
+                user = User(
+                    username=username,
+                    role=account_type,
+                    full_name=full_name,
+                    email=email or None,
+                    phone=phone or None,
+                )
+                user.set_password(password)
+                db.session.add(user)
+                db.session.commit()
+
+                flash(f"{account_type.capitalize()} account created successfully! You can now log in.", "success")
+                return redirect(url_for("login"))
+
+            # ---------------- RESIDENT REGISTRATION (STUDENT) ----------------
             # 1. Constraint: Verify registration code
-            if reg_code not in valid_codes:
+            if reg_code not in valid_resident_codes and reg_code not in valid_warden_codes:
                 flash("Invalid registration code! Only authorized hostel members with a valid code can register.", "danger")
                 return render_template("register.html", rooms=rooms, hostel_config=HOSTEL_CONFIG)
 
             # 2. Constraint: Picture requirement
+            enrolled_face = request.form.get("enrolled_face", "").strip()
             if not enrolled_face or len(enrolled_face) < 50:
                 flash("Student Picture Required: Please capture your live picture or upload a clear photo before submitting.", "warning")
                 return render_template("register.html", rooms=rooms, hostel_config=HOSTEL_CONFIG)
 
             # 3. Constraint: Room selection
+            room_id = request.form.get("room_id", "").strip()
+            room_number = request.form.get("room_number", "").strip()
             allocated_room = None
             if room_id and room_id.isdigit():
                 allocated_room = Room.query.get(int(room_id))
@@ -317,26 +370,35 @@ def create_app():
                 flash(f"Room {allocated_room.room_number} ({allocated_room.block}) is currently at full capacity. Please select an available room.", "danger")
                 return render_template("register.html", rooms=rooms, hostel_config=HOSTEL_CONFIG)
 
-            # 4. Constraint: Password length & confirmation
-            if len(password) < 6:
-                flash("Password must be at least 6 characters long.", "warning")
-                return render_template("register.html", rooms=rooms, hostel_config=HOSTEL_CONFIG)
+            # 4. Roll number removed from form: Auto-generate unique student code if not provided
+            student_code = request.form.get("student_code", "").strip().upper()
+            if not student_code:
+                import random
+                for _ in range(50):
+                    cand = f"RES{random.randint(1000, 9999)}"
+                    if not Student.query.filter_by(student_code=cand).first():
+                        student_code = cand
+                        break
+                if not student_code:
+                    student_code = f"RES{int(datetime.utcnow().timestamp()) % 100000}"
 
-            if password != confirm_password:
-                flash("Passwords do not match. Please verify and try again.", "warning")
-                return render_template("register.html", rooms=rooms, hostel_config=HOSTEL_CONFIG)
-
-            # 5. Constraint: Check username uniqueness
-            if User.query.filter_by(username=username).first():
-                flash("This username is already taken. Please choose another.", "warning")
-                return render_template("register.html", rooms=rooms, hostel_config=HOSTEL_CONFIG)
-
-            # 6. Constraint: Check student_code uniqueness
             if Student.query.filter_by(student_code=student_code).first():
                 flash(f"Student code '{student_code}' is already registered.", "warning")
                 return render_template("register.html", rooms=rooms, hostel_config=HOSTEL_CONFIG)
 
+            # 5. Department & semester/year removed from form: default values
+            department = request.form.get("department", "").strip() or "General"
+            year = int(request.form.get("year") or 1)
+            gender = request.form.get("gender", "female").strip().lower()
+
+            # 6. Automatic Bed Allocation: find first empty bed in the room (Bed 1 .. capacity)
+            taken_beds = {s.bed_number for s in allocated_room.students if s.bed_number is not None}
+            allocated_bed = next((b for b in range(1, allocated_room.capacity + 1) if b not in taken_beds), 1)
+
             # 7. Update active hostel location if custom coordinates were selected/synced
+            hostel_location = request.form.get("hostel_location_name", "").strip() or request.form.get("hostel_location", "").strip() or HOSTEL_CONFIG.get("name", "Main Campus Hostel Gate")
+            hostel_lat = request.form.get("hostel_lat", "").strip()
+            hostel_lon = request.form.get("hostel_lon", "").strip()
             if hostel_lat and hostel_lon:
                 try:
                     lat_f = float(hostel_lat)
@@ -365,15 +427,15 @@ def create_app():
                 department=department,
                 year=year,
                 gender=gender,
-                room_id=allocated_room.id if allocated_room else None,
+                room_id=allocated_room.id,
+                bed_number=allocated_bed,
                 enrolled_face_image=enrolled_face,
                 hostel_location=hostel_location,
             )
             db.session.add(student)
             db.session.commit()
 
-            room_str = f"Room {allocated_room.room_number}" if allocated_room else "Hostel"
-            flash(f"Registration successful! Enrolled in {room_str} with designated location '{hostel_location}'. You can now log in.", "success")
+            flash(f"Registration successful! Enrolled in Room {allocated_room.room_number} (Bed {allocated_bed}). Student ID: {student_code}. You can now log in.", "success")
             return redirect(url_for("login"))
 
         return render_template("register.html", rooms=rooms, hostel_config=HOSTEL_CONFIG)
@@ -847,14 +909,37 @@ def create_app():
     def warden_allocate_room():
         student_id = request.form.get("student_id")
         room_id = request.form.get("room_id")
+        bed_number = request.form.get("bed_number")
         student = Student.query.get_or_404(student_id)
         room = Room.query.get_or_404(room_id)
         if room.available_beds <= 0:
             flash(f"Room {room.room_number} is already full.", "danger")
         else:
+            taken_beds = {s.bed_number for s in room.students if s.bed_number is not None and s.id != student.id}
+            if bed_number and str(bed_number).isdigit() and int(bed_number) not in taken_beds and int(bed_number) <= room.capacity:
+                assigned_bed = int(bed_number)
+            else:
+                assigned_bed = next((b for b in range(1, room.capacity + 1) if b not in taken_beds), 1)
+
             student.room_id = room.id
+            student.bed_number = assigned_bed
             db.session.commit()
-            flash(f"{student.user.full_name} allocated to room {room.room_number}.", "success")
+            flash(f"{student.user.full_name} allocated to Room {room.room_number} (Bed {assigned_bed}).", "success")
+        return redirect(url_for("warden_rooms"))
+
+    @app.route("/warden/rooms/vacate/<int:student_id>", methods=["POST"])
+    @role_required("warden", "admin")
+    def warden_vacate_bed(student_id):
+        student = Student.query.get_or_404(student_id)
+        room_num = student.room.room_number if student.room else "Unknown"
+        bed_num = student.bed_number or "Assigned"
+        student_name = student.user.full_name
+
+        student.room_id = None
+        student.bed_number = None
+        db.session.commit()
+
+        flash(f"Bed {bed_num} in Room {room_num} vacated successfully! {student_name} is now unassigned, and Bed {bed_num} is marked EMPTY / VACANT.", "success")
         return redirect(url_for("warden_rooms"))
 
     @app.route("/warden/rooms/recommend/<int:student_id>")
