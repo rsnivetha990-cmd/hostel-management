@@ -51,11 +51,16 @@
                 </div>
               </td>
               <td>
-                {% if r.face_snapshot %}
-                  <img src="{{ r.face_snapshot }}" alt="Face Snapshot" class="rounded-circle border" style="width:36px; height:36px; object-fit: cover;" title="Verified live face capture">
-                {% else %}
-                  <span class="text-muted small">—</span>
-                {% endif %}
+                <div class="d-flex align-items-center gap-1">
+                  {% if r.student.enrolled_face_image %}
+                    <img src="{{ r.student.enrolled_face_image }}" alt="Registered Face" class="rounded-circle border border-primary" style="width:32px; height:32px; object-fit: cover;" title="Registered Reference Photo">
+                  {% endif %}
+                  {% if r.face_snapshot %}
+                    <img src="{{ r.face_snapshot }}" alt="Live Selfie" class="rounded-circle border border-success" style="width:32px; height:32px; object-fit: cover;" title="Live Gate Selfie">
+                  {% else %}
+                    <span class="text-muted small">—</span>
+                  {% endif %}
+                </div>
               </td>
             </tr>
           {% else %}

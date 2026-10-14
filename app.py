@@ -279,6 +279,7 @@ def create_app():
                 department=department,
                 year=year,
                 gender=gender,
+                enrolled_face_image=request.form.get("enrolled_face") or None,
             )
             db.session.add(student)
             db.session.commit()
@@ -333,7 +334,6 @@ def create_app():
     def student_scan():
         student = current_user.student_profile
         if request.method == "POST":
-            token = request.form.get("token", "").strip()
             device_id = request.form.get("device_id", "").strip()
             device_name = request.form.get("device_name", "").strip() or "Mobile Device"
             latitude_str = request.form.get("latitude", "").strip()
@@ -341,16 +341,7 @@ def create_app():
             face_image = request.form.get("face_image", "").strip()
             demo_bypass_gps = request.form.get("demo_bypass_gps") == "true"
 
-            # 1. Verify Changing Entrance QR Code
-            qr = QRCode.query.filter_by(token=token).first()
-            if not qr:
-                flash("Invalid QR code! Please scan the changing code displayed at the hostel entrance.", "danger")
-                return redirect(url_for("student_scan"))
-            elif not qr.is_valid:
-                flash("This entrance QR code has expired! The entrance code changes every 30–60 seconds. Please scan the current code.", "warning")
-                return redirect(url_for("student_scan"))
-
-            # 2. Check if already marked today
+            # 1. Check if already marked today
             existing = Attendance.query.filter_by(
                 student_id=student.id, date=date.today()
             ).first()
@@ -360,7 +351,7 @@ def create_app():
                     already_marked=True
                 )
 
-            # 3. Trusted Device Verification
+            # 2. Trusted Device Verification
             if not device_id:
                 flash("Device identification failed! Please ensure cookies and local storage are enabled on your device.", "danger")
                 return redirect(url_for("student_scan"))
@@ -378,7 +369,6 @@ def create_app():
                     "If you have changed your phone, please contact the warden for a trusted device reset.",
                     "danger"
                 )
-                # Alert warden about untrusted device attempt
                 notif = Notification(
                     recipient_role="warden",
                     title=f"Untrusted Device Blocked: {student.user.full_name}",
@@ -389,7 +379,7 @@ def create_app():
                 db.session.commit()
                 return redirect(url_for("student_scan"))
 
-            # 4. GPS Geolocation & Hostel Boundary Verification
+            # 3. GPS Geolocation & Hostel Boundary Verification
             lat_val = None
             lon_val = None
             distance_meters = None
@@ -420,7 +410,7 @@ def create_app():
                 if distance_meters is None:
                     distance_meters = 15.0  # Simulated entrance distance for demo mode
 
-            # 5. Live Face Capture Verification
+            # 4. Live Face Capture Verification
             if not face_image or len(face_image) < 20:
                 flash("Live Face Verification Required: Please look into your camera and capture a live verification selfie before submitting.", "danger")
                 return redirect(url_for("student_scan"))
@@ -429,14 +419,15 @@ def create_app():
             if not student.enrolled_face_image:
                 student.enrolled_face_image = face_image
                 db.session.commit()
+                flash("Your face photo has been registered as your official Reference Face Photo!", "info")
 
-            # 6. All Checks Passed -> Save Attendance
+            # 5. All 3 Verification Checks Passed -> Save Attendance
             status = "Late" if datetime.now().hour >= 21 else "Present"
             att = Attendance(
                 student_id=student.id,
-                qr_id=qr.id,
+                qr_id=None,
                 status=status,
-                verification_status="Verified (GPS + Face + Device + QR)",
+                verification_status="Verified (Device + GPS + Live Face)",
                 device_id=device_id,
                 device_name=device_name,
                 latitude=lat_val,
@@ -623,6 +614,7 @@ def create_app():
             pending_complaints=pending_complaints,
             active_qr=active_qr,
             full_rooms=full_rooms,
+            hostel_config=HOSTEL_CONFIG,
         )
 
     @app.route("/warden/qr/generate", methods=["GET", "POST"])
@@ -691,16 +683,38 @@ def create_app():
         return jsonify(HOSTEL_CONFIG)
 
     @app.route("/api/hostel-location/sync-my-location", methods=["POST"])
-    @role_required("warden", "admin")
+    @login_required
     def sync_hostel_location():
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or request.form.to_dict() or {}
         lat = data.get("latitude")
         lon = data.get("longitude")
+        radius = data.get("radius_meters") or data.get("radius")
         if lat is not None and lon is not None:
-            HOSTEL_CONFIG["latitude"] = float(lat)
-            HOSTEL_CONFIG["longitude"] = float(lon)
-            return jsonify(success=True, config=HOSTEL_CONFIG, message="Hostel entrance synced to current coordinates.")
+            try:
+                HOSTEL_CONFIG["latitude"] = float(lat)
+                HOSTEL_CONFIG["longitude"] = float(lon)
+                if radius:
+                    HOSTEL_CONFIG["radius_meters"] = float(radius)
+                return jsonify(
+                    success=True,
+                    config=HOSTEL_CONFIG,
+                    message=f"Hostel Gate location synced to ({HOSTEL_CONFIG['latitude']:.5f}, {HOSTEL_CONFIG['longitude']:.5f}), radius: {int(HOSTEL_CONFIG['radius_meters'])}m."
+                )
+            except (ValueError, TypeError):
+                return jsonify(success=False, message="Coordinates and radius must be valid numbers."), 400
         return jsonify(success=False, message="Invalid coordinates provided."), 400
+
+    @app.route("/api/student/enroll-face", methods=["POST"])
+    @role_required("student")
+    def student_enroll_face():
+        student = current_user.student_profile
+        data = request.get_json(silent=True) or request.form.to_dict() or {}
+        face_img = data.get("face_image", "").strip()
+        if face_img and len(face_img) > 50:
+            student.enrolled_face_image = face_img
+            db.session.commit()
+            return jsonify(success=True, message="Reference face photo successfully enrolled!")
+        return jsonify(success=False, message="Invalid or empty face photo."), 400
 
     @app.route("/warden/students/<int:student_id>/reset-device", methods=["POST"])
     @role_required("warden", "admin")

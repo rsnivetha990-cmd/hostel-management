@@ -32,15 +32,70 @@
 
 <div class="row g-4">
   <div class="col-md-6">
-    <div class="card p-3">
-      <h5><i class="bi bi-qr-code"></i> QR Attendance</h5>
-      <p class="text-muted">Generate a new dynamic QR code for today's attendance session.</p>
-      <a href="{{ url_for('warden_generate_qr') }}" class="btn btn-primary">Generate QR Code</a>
-      {% if active_qr %}
-        <a href="{{ url_for('warden_qr_display', qr_id=active_qr.id) }}" class="btn btn-outline-secondary mt-2">
-          View Last QR ({{ active_qr.session_label }})
+    <div class="card p-3 shadow-sm">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="mb-0"><i class="bi bi-geo-alt-fill text-danger"></i> Hostel Location & Geofence</h5>
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle" id="geofenceStatusBadge">Active</span>
+      </div>
+      <p class="text-muted small mb-2">
+        Define the permitted GPS gate coordinates for student attendance verification.
+      </p>
+      <div class="p-2 bg-light rounded border mb-3 small">
+        <div class="row g-2">
+          <div class="col-6">
+            <span class="text-muted d-block">Hostel Latitude:</span>
+            <strong id="dispLat" class="text-primary">{{ hostel_config.latitude }}</strong>
+          </div>
+          <div class="col-6">
+            <span class="text-muted d-block">Hostel Longitude:</span>
+            <strong id="dispLon" class="text-primary">{{ hostel_config.longitude }}</strong>
+          </div>
+          <div class="col-12 border-top pt-1 mt-1">
+            <span class="text-muted">Permitted Radius:</span>
+            <strong>{{ hostel_config.radius_meters|int }} meters</strong>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex gap-2 mb-2">
+        <button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="setHostelGateToMyGPS()">
+          <i class="bi bi-crosshair me-1"></i> Set Gate to My Current GPS
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#manualGpsCollapse" title="Type coordinates manually">
+          <i class="bi bi-pencil-square"></i> Manual Edit
+        </button>
+      </div>
+
+      <!-- Manual Coordinates Collapse Form -->
+      <div class="collapse mb-2" id="manualGpsCollapse">
+        <div class="card card-body p-2 bg-light border small">
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label mb-0 fw-semibold">Latitude</label>
+              <input type="number" step="any" class="form-control form-control-sm" id="manualLat" value="{{ hostel_config.latitude }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label mb-0 fw-semibold">Longitude</label>
+              <input type="number" step="any" class="form-control form-control-sm" id="manualLon" value="{{ hostel_config.longitude }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label mb-0 fw-semibold">Allowed Perimeter Radius (meters)</label>
+              <div class="input-group input-group-sm">
+                <input type="number" class="form-control" id="manualRadius" value="{{ hostel_config.radius_meters|int }}">
+                <button class="btn btn-primary" type="button" onclick="saveManualGps()">
+                  <i class="bi bi-check2"></i> Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('warden_attendance') }}" class="btn btn-sm btn-primary w-100">
+          <i class="bi bi-calendar-check me-1"></i> Attendance Logs
         </a>
-      {% endif %}
+      </div>
+      <div id="gateSyncFeedback" class="small text-muted mt-2"></div>
     </div>
   </div>
   <div class="col-md-6">
@@ -89,4 +144,73 @@
     </div>
   </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+function setHostelGateToMyGPS() {
+  const fb = document.getElementById('gateSyncFeedback');
+  if (!navigator.geolocation) {
+    fb.innerHTML = '<span class="text-danger">GPS not supported by your browser.</span>';
+    return;
+  }
+  fb.innerHTML = '<span class="text-primary">Acquiring current GPS location...</span>';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      fetch('/api/hostel-location/sync-my-location', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude
+        })
+      })
+      .then(r => r.json())
+      .then(res => {
+        document.getElementById('dispLat').textContent = pos.coords.latitude.toFixed(5);
+        document.getElementById('dispLon').textContent = pos.coords.longitude.toFixed(5);
+        fb.innerHTML = `<span class="text-success fw-semibold"><i class="bi bi-check-circle"></i> Hostel Gate successfully set to: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}</span>`;
+      });
+    },
+    (err) => {
+      fb.innerHTML = `<span class="text-danger">GPS Error: ${err.message}</span>`;
+    },
+    { enableHighAccuracy: true }
+  );
+}
+
+function saveManualGps() {
+  const fb = document.getElementById('gateSyncFeedback');
+  const lat = parseFloat(document.getElementById('manualLat').value);
+  const lon = parseFloat(document.getElementById('manualLon').value);
+  const radius = parseFloat(document.getElementById('manualRadius').value);
+
+  if (isNaN(lat) || isNaN(lon) || isNaN(radius)) {
+    fb.innerHTML = '<span class="text-danger">Please enter valid numerical values for coordinates and radius.</span>';
+    return;
+  }
+
+  fetch('/api/hostel-location/sync-my-location', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      latitude: lat,
+      longitude: lon,
+      radius_meters: radius
+    })
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      document.getElementById('dispLat').textContent = lat.toFixed(5);
+      document.getElementById('dispLon').textContent = lon.toFixed(5);
+      fb.innerHTML = `<span class="text-success fw-semibold"><i class="bi bi-check-circle"></i> Coordinates saved: ${lat.toFixed(5)}, ${lon.toFixed(5)} (Radius: ${radius}m)</span>`;
+    } else {
+      fb.innerHTML = `<span class="text-danger">${res.message || 'Error saving coordinates'}</span>`;
+    }
+  })
+  .catch(err => {
+    fb.innerHTML = `<span class="text-danger">Server error: ${err.message}</span>`;
+  });
+}
+</script>
 {% endblock %}

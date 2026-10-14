@@ -94,6 +94,41 @@
           </div>
         </div>
 
+        <!-- Reference Face Enrollment -->
+        <div class="mb-4 p-3 bg-light rounded-3 border">
+          <label class="form-label fw-bold text-primary mb-1">
+            <i class="bi bi-camera-fill me-1"></i> Enroll Reference Face Photo (For Attendance)
+          </label>
+          <div class="form-text small text-muted mb-2">
+            Your live face will be verified against this photo whenever you mark daily attendance.
+          </div>
+          <div class="row align-items-center">
+            <div class="col-sm-7 text-center">
+              <div class="position-relative d-inline-block rounded overflow-hidden border bg-black shadow-sm" style="width:100%; max-width:240px; height:180px;">
+                <video id="regVideo" autoplay playsinline muted style="width:100%; height:100%; object-fit: cover;"></video>
+              </div>
+              <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="captureRegFace()">
+                  <i class="bi bi-camera me-1"></i> Capture Face Photo
+                </button>
+              </div>
+            </div>
+            <div class="col-sm-5 text-center mt-3 mt-sm-0">
+              <img id="regFacePreview" src="" alt="Enrolled Preview" class="img-thumbnail rounded-circle mb-2" style="width:90px; height:90px; object-fit: cover; display:none;">
+              <div id="noRegFacePlaceholder" class="text-muted small py-2">
+                <i class="bi bi-person-bounding-box fs-3 text-secondary d-block mb-1"></i>
+                <span>No photo captured yet</span>
+              </div>
+              <input type="hidden" name="enrolled_face" id="enrolledFaceInput">
+              <label class="btn btn-xs btn-outline-secondary py-1 px-2 mt-1" style="font-size:0.75rem;">
+                <i class="bi bi-upload"></i> Or Upload Photo File
+                <input type="file" id="regFaceFileInput" accept="image/*" style="display:none;" onchange="handleRegFileUpload(this)">
+              </label>
+            </div>
+          </div>
+          <canvas id="regCanvas" width="320" height="240" style="display:none;"></canvas>
+        </div>
+
         <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
           <i class="bi bi-person-check me-1"></i> Register & Create Account
         </button>
@@ -108,4 +143,55 @@
     </div>
   </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+  let regStream = null;
+  function startRegCamera() {
+    const video = document.getElementById("regVideo");
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+        .then((stream) => {
+          regStream = stream;
+          video.srcObject = stream;
+        })
+        .catch((err) => console.log("Camera access:", err));
+    }
+  }
+
+  function captureRegFace() {
+    const video = document.getElementById("regVideo");
+    const canvas = document.getElementById("regCanvas");
+    if (video.videoWidth > 0) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      setEnrolledFace(dataUrl);
+    } else {
+      alert("Please allow camera access to snap your face photo.");
+    }
+  }
+
+  function handleRegFileUpload(input) {
+    if (input.files && input.files[0]) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        setEnrolledFace(e.target.result);
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+  }
+
+  function setEnrolledFace(dataUrl) {
+    document.getElementById("enrolledFaceInput").value = dataUrl;
+    const preview = document.getElementById("regFacePreview");
+    preview.src = dataUrl;
+    preview.style.display = "block";
+    document.getElementById("noRegFacePlaceholder").style.display = "none";
+  }
+
+  window.addEventListener("DOMContentLoaded", startRegCamera);
+</script>
 {% endblock %}
