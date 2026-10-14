@@ -77,6 +77,7 @@ class Student(db.Model):
     trusted_device_id = db.Column(db.String(120), nullable=True)
     trusted_device_name = db.Column(db.String(120), nullable=True)
     enrolled_face_image = db.Column(db.Text, nullable=True)
+    hostel_location = db.Column(db.String(120), nullable=True)
 
     attendances = db.relationship("Attendance", backref="student", lazy=True)
     complaints = db.relationship("Complaint", backref="student", lazy=True)

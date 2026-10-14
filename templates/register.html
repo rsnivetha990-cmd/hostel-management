@@ -2,54 +2,57 @@
 {% block title %}Register - Smart Hostel{% endblock %}
 {% block content %}
 <div class="login-wrapper">
-  <div class="card register-card shadow-lg">
+  <div class="card register-card shadow-lg border-0" style="max-width: 680px; margin: 0 auto;">
     <div class="card-body p-4 p-md-5">
       <div class="text-center mb-4">
         <i class="bi bi-building-add text-primary" style="font-size:2.5rem;"></i>
-        <h3 class="mt-2 mb-0 fw-bold">Hostel Registration</h3>
-        <p class="text-muted small">Authorized Member Onboarding</p>
+        <h3 class="mt-2 mb-0 fw-bold">Hostel Resident Registration</h3>
+        <p class="text-muted small">Authorized Member Onboarding & Profile Setup</p>
       </div>
 
       {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
       {% for category, message in messages %}
-      <div class="alert alert-{{ category }}">{{ message }}</div>
+      <div class="alert alert-{{ category }} alert-dismissible fade show">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
       {% endfor %}
       {% endif %}
       {% endwith %}
 
-      <form method="POST">
-        <!-- Constraint: Authorized Member Registration Code -->
+      <form method="POST" id="regForm" onsubmit="return validateRegistrationForm();">
+        <!-- 1. Constraint: Authorized Member Registration Code -->
         <div class="mb-3 p-3 bg-light rounded-3 border border-primary border-opacity-25">
           <label class="form-label fw-bold text-primary mb-1">
             <i class="bi bi-shield-lock-fill me-1"></i> Authorized Registration Code
           </label>
           <input type="text" class="form-control form-control-lg border-primary" name="registration_code" required
-            placeholder="Enter Member Code" autocomplete="off" autofocus>
+            placeholder="Enter Member Code (e.g. HOSTEL2026)" autocomplete="off" autofocus>
           <div class="form-text small text-muted">
-            <i class="bi bi-info-circle"></i> Only students with a valid code provided by the hostel office can
-            register.
+            <i class="bi bi-info-circle"></i> Provided by the hostel administration office.
           </div>
         </div>
 
+        <!-- 2. Personal & Academic Information -->
         <div class="row g-2 mb-3">
           <div class="col-md-7">
-            <label class="form-label">Full Name</label>
-            <input type="text" class="form-control" name="full_name" required placeholder="e.g. Jane Doe">
+            <label class="form-label fw-semibold">Full Name</label>
+            <input type="text" class="form-control" name="full_name" required placeholder="e.g. Nivetha S">
           </div>
           <div class="col-md-5">
-            <label class="form-label">Student ID / Roll No</label>
-            <input type="text" class="form-control" name="student_code" required placeholder="e.g. ST010">
+            <label class="form-label fw-semibold">Student ID / Roll No</label>
+            <input type="text" class="form-control" name="student_code" required placeholder="e.g. ST015">
           </div>
         </div>
 
         <div class="row g-2 mb-3">
           <div class="col-md-5">
-            <label class="form-label">Department</label>
-            <input type="text" class="form-control" name="department" required placeholder="e.g. CSE, ECE">
+            <label class="form-label fw-semibold">Department</label>
+            <input type="text" class="form-control" name="department" required placeholder="e.g. CSE, ECE, IT">
           </div>
           <div class="col-md-3">
-            <label class="form-label">Year</label>
+            <label class="form-label fw-semibold">Year</label>
             <select class="form-select" name="year" required>
               <option value="1">1st</option>
               <option value="2" selected>2nd</option>
@@ -58,79 +61,167 @@
             </select>
           </div>
           <div class="col-md-4">
-            <label class="form-label">Gender</label>
-            <select class="form-select" name="gender" required>
-              <option value="female">Female</option>
+            <label class="form-label fw-semibold">Gender</label>
+            <select class="form-select" name="gender" id="genderSelect" required onchange="filterRoomsByGender()">
+              <option value="female" selected>Female</option>
               <option value="male">Male</option>
             </select>
           </div>
         </div>
 
-        <div class="row g-2 mb-3">
-          <div class="col-md-6">
-            <label class="form-label">Email</label>
-            <input type="email" class="form-control" name="email" placeholder="student@hostel.edu">
+        <!-- 3. Room Number Allocation Requirement -->
+        <div class="mb-3 p-3 bg-light rounded-3 border">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label fw-bold text-dark mb-0">
+              <i class="bi bi-door-open-fill text-primary me-1"></i> Allocated Room Number
+            </label>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Required</span>
           </div>
-          <div class="col-md-6">
-            <label class="form-label">Phone Number</label>
-            <input type="tel" class="form-control" name="phone" placeholder="9876543210">
-          </div>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Username</label>
-          <input type="text" class="form-control" name="username" required placeholder="Choose a unique username">
-        </div>
-
-        <div class="row g-2 mb-4">
-          <div class="col-md-6">
-            <label class="form-label">Password</label>
-            <input type="password" class="form-control" name="password" required placeholder="Min 6 characters">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">Confirm Password</label>
-            <input type="password" class="form-control" name="confirm_password" required
-              placeholder="Re-enter password">
-          </div>
-        </div>
-
-        <!-- Reference Face Enrollment -->
-        <div class="mb-4 p-3 bg-light rounded-3 border">
-          <label class="form-label fw-bold text-primary mb-1">
-            <i class="bi bi-camera-fill me-1"></i> Enroll Reference Face Photo (For Attendance)
-          </label>
           <div class="form-text small text-muted mb-2">
-            Your live face will be verified against this photo whenever you mark daily attendance.
+            Select the room allocated to you or enter your designated room number.
           </div>
-          <div class="row align-items-center">
-            <div class="col-sm-7 text-center">
-              <div class="position-relative d-inline-block rounded overflow-hidden border bg-black shadow-sm" style="width:100%; max-width:240px; height:180px;">
-                <video id="regVideo" autoplay playsinline muted style="width:100%; height:100%; object-fit: cover;"></video>
+          <div class="row g-2">
+            <div class="col-md-8">
+              <select class="form-select border-primary" name="room_id" id="roomSelect" onchange="onRoomDropdownChange(this)">
+                <option value="" disabled selected>-- Select Your Room Number --</option>
+                {% for r in rooms %}
+                  <option value="{{ r.id }}" data-roomnum="{{ r.room_number }}" data-gender="{{ r.gender }}" {% if r.available_beds <= 0 %}disabled{% endif %}>
+                    Room {{ r.room_number }} ({{ r.block }} - Floor {{ r.floor }}) &bull; {{ r.available_beds }} beds left {% if r.available_beds <= 0 %}(FULL){% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <input type="text" class="form-control" name="room_number" id="manualRoomNumber" placeholder="Or type room no">
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Designated Hostel Location Selection -->
+        <div class="mb-3 p-3 bg-light rounded-3 border border-danger border-opacity-25">
+          <div class="d-flex flex-wrap justify-content-between align-items-center mb-1 gap-2">
+            <label class="form-label fw-bold text-dark mb-0">
+              <i class="bi bi-geo-alt-fill text-danger me-1"></i> Designated Hostel Location
+            </label>
+            <button type="button" class="btn btn-xs btn-outline-danger py-1 px-2" style="font-size:0.75rem;" onclick="detectRegistrationGPS()">
+              <i class="bi bi-crosshair me-1"></i> Detect & Use My Current GPS
+            </button>
+          </div>
+          <div class="form-text small text-muted mb-2">
+            Specify which hostel branch / gate location you belong to for attendance geofence verification.
+          </div>
+
+          <div class="row g-2 align-items-center">
+            <div class="col-md-7">
+              <select class="form-select" id="hostelLocationSelect" name="hostel_location_name" onchange="onHostelLocationChange(this)">
+                <option value="Main Campus Hostel Gate" data-lat="{{ hostel_config.latitude }}" data-lon="{{ hostel_config.longitude }}" selected>
+                  Main Campus Hostel Gate ({{ hostel_config.latitude }}, {{ hostel_config.longitude }})
+                </option>
+                <option value="North Wing Campus Gate" data-lat="12.9750" data-lon="77.5980">
+                  North Wing Campus Gate (12.9750, 77.5980)
+                </option>
+                <option value="South Block Gate 2" data-lat="12.9680" data-lon="77.5910">
+                  South Block Gate 2 (12.9680, 77.5910)
+                </option>
+                <option value="Current GPS Location" data-lat="" data-lon="" id="optCustomGps">
+                  Use My Current GPS Location
+                </option>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <div class="p-2 bg-white rounded border small" id="activeHostelLocBadge">
+                <span class="text-muted d-block" style="font-size:0.75rem;">Selected Gate Coordinates:</span>
+                <span class="fw-semibold text-danger" id="locCoordsDisp">{{ hostel_config.latitude }}, {{ hostel_config.longitude }}</span>
               </div>
-              <div class="mt-2">
-                <button type="button" class="btn btn-sm btn-outline-primary" onclick="captureRegFace()">
-                  <i class="bi bi-camera me-1"></i> Capture Face Photo
+            </div>
+          </div>
+          <!-- Hidden Inputs for Hostel Coordinates -->
+          <input type="hidden" name="hostel_lat" id="regHostelLat" value="{{ hostel_config.latitude }}">
+          <input type="hidden" name="hostel_lon" id="regHostelLon" value="{{ hostel_config.longitude }}">
+          <div id="gpsFeedback" class="small mt-2"></div>
+        </div>
+
+        <!-- 5. Student Picture / Reference Face Enrollment -->
+        <div class="mb-4 p-3 bg-light rounded-3 border border-success border-opacity-25">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label fw-bold text-dark mb-0">
+              <i class="bi bi-camera-fill text-success me-1"></i> Student Identity Picture / Photo
+            </label>
+            <span class="badge bg-success-subtle text-success border border-success-subtle">Required</span>
+          </div>
+          <div class="form-text small text-muted mb-3">
+            Your daily attendance will be matched against this picture for biometric anti-proxy verification.
+          </div>
+
+          <div class="row align-items-center g-3">
+            <div class="col-md-7 text-center">
+              <div class="position-relative d-inline-block rounded-3 overflow-hidden border bg-black shadow-sm" style="width:100%; max-width:260px; height:195px;">
+                <video id="regVideo" autoplay playsinline muted style="width:100%; height:100%; object-fit: cover; transform: scaleX(-1);"></video>
+                <!-- Oval Face Guide -->
+                <div class="position-absolute top-50 start-50 translate-middle border border-2 border-success rounded-pill opacity-75"
+                     style="width:120px; height:150px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35); pointer-events:none;"></div>
+              </div>
+              <div class="mt-2 d-flex justify-content-center gap-2">
+                <button type="button" class="btn btn-sm btn-success" onclick="captureRegFace()">
+                  <i class="bi bi-camera-fill me-1"></i> Snap Picture
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="startRegCamera()" title="Restart camera">
+                  <i class="bi bi-arrow-repeat"></i>
                 </button>
               </div>
             </div>
-            <div class="col-sm-5 text-center mt-3 mt-sm-0">
-              <img id="regFacePreview" src="" alt="Enrolled Preview" class="img-thumbnail rounded-circle mb-2" style="width:90px; height:90px; object-fit: cover; display:none;">
-              <div id="noRegFacePlaceholder" class="text-muted small py-2">
-                <i class="bi bi-person-bounding-box fs-3 text-secondary d-block mb-1"></i>
-                <span>No photo captured yet</span>
+
+            <div class="col-md-5 text-center">
+              <img id="regFacePreview" src="" alt="Picture Preview" class="img-thumbnail rounded-circle shadow-sm mb-2" 
+                   style="width:110px; height:110px; object-fit: cover; display:none; border: 3px solid #198754;">
+              <div id="noRegFacePlaceholder" class="text-muted small py-3">
+                <i class="bi bi-person-bounding-box fs-1 text-secondary d-block mb-1"></i>
+                <span>No picture captured yet</span>
               </div>
               <input type="hidden" name="enrolled_face" id="enrolledFaceInput">
-              <label class="btn btn-xs btn-outline-secondary py-1 px-2 mt-1" style="font-size:0.75rem;">
-                <i class="bi bi-upload"></i> Or Upload Photo File
-                <input type="file" id="regFaceFileInput" accept="image/*" style="display:none;" onchange="handleRegFileUpload(this)">
-              </label>
+              <div>
+                <label class="btn btn-xs btn-outline-secondary py-1 px-2" style="font-size:0.75rem;">
+                  <i class="bi bi-upload me-1"></i> Or Upload Picture File
+                  <input type="file" id="regFaceFileInput" accept="image/*" style="display:none;" onchange="handleRegFileUpload(this)">
+                </label>
+              </div>
+              <div id="pictureStatusBadge" class="badge bg-secondary mt-2">Picture Required</div>
             </div>
           </div>
           <canvas id="regCanvas" width="320" height="240" style="display:none;"></canvas>
         </div>
 
-        <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
-          <i class="bi bi-person-check me-1"></i> Register & Create Account
+        <!-- 6. Account Credentials -->
+        <div class="row g-2 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Email (Optional)</label>
+            <input type="email" class="form-control" name="email" placeholder="student@hostel.edu">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Phone Number</label>
+            <input type="tel" class="form-control" name="phone" placeholder="9876543210">
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Username</label>
+          <input type="text" class="form-control" name="username" required placeholder="Choose a unique username">
+        </div>
+
+        <div class="row g-2 mb-4">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Password</label>
+            <input type="password" class="form-control" name="password" required placeholder="Min 6 characters">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Confirm Password</label>
+            <input type="password" class="form-control" name="confirm_password" required
+              placeholder="Re-enter password">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100 py-3 fw-bold fs-6 shadow-sm">
+          <i class="bi bi-person-check-fill me-1"></i> Register & Create Account
         </button>
       </form>
 
@@ -144,8 +235,10 @@
   </div>
 </div>
 {% endblock %}
+
 {% block scripts %}
 <script>
+  // 1. Camera Initialization for Picture Enrollment
   let regStream = null;
   function startRegCamera() {
     const video = document.getElementById("regVideo");
@@ -155,22 +248,28 @@
           regStream = stream;
           video.srcObject = stream;
         })
-        .catch((err) => console.log("Camera access:", err));
+        .catch((err) => {
+          console.warn("Camera access denied or unavailable:", err);
+          document.getElementById("pictureStatusBadge").textContent = "Camera unavailable (use file upload)";
+        });
     }
   }
 
   function captureRegFace() {
     const video = document.getElementById("regVideo");
     const canvas = document.getElementById("regCanvas");
-    if (video.videoWidth > 0) {
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext("2d");
+      // Mirrored capture
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
       setEnrolledFace(dataUrl);
     } else {
-      alert("Please allow camera access to snap your face photo.");
+      alert("Please ensure your camera is running before capturing a picture.");
     }
   }
 
@@ -190,8 +289,87 @@
     preview.src = dataUrl;
     preview.style.display = "block";
     document.getElementById("noRegFacePlaceholder").style.display = "none";
+
+    const badge = document.getElementById("pictureStatusBadge");
+    badge.className = "badge bg-success mt-2";
+    badge.textContent = "Picture Captured ✅";
   }
 
-  window.addEventListener("DOMContentLoaded", startRegCamera);
+  // 2. Room Dropdown & Manual Input Sync
+  function onRoomDropdownChange(select) {
+    const opt = select.options[select.selectedIndex];
+    if (opt && opt.dataset.roomnum) {
+      document.getElementById("manualRoomNumber").value = opt.dataset.roomnum;
+    }
+  }
+
+  // 3. Hostel Location Selection & GPS Detection
+  function onHostelLocationChange(select) {
+    const opt = select.options[select.selectedIndex];
+    const lat = opt.dataset.lat;
+    const lon = opt.dataset.lon;
+    if (lat && lon) {
+      document.getElementById("regHostelLat").value = lat;
+      document.getElementById("regHostelLon").value = lon;
+      document.getElementById("locCoordsDisp").textContent = `${lat}, ${lon}`;
+      document.getElementById("gpsFeedback").innerHTML = "";
+    } else if (opt.value === "Current GPS Location") {
+      detectRegistrationGPS();
+    }
+  }
+
+  function detectRegistrationGPS() {
+    const feedback = document.getElementById("gpsFeedback");
+    if (!navigator.geolocation) {
+      feedback.innerHTML = '<span class="text-danger">Geolocation is not supported by your browser.</span>';
+      return;
+    }
+    feedback.innerHTML = '<span class="text-primary"><i class="bi bi-hourglass-split"></i> Detecting your current coordinates...</span>';
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude.toFixed(5);
+        const lon = pos.coords.longitude.toFixed(5);
+        document.getElementById("regHostelLat").value = lat;
+        document.getElementById("regHostelLon").value = lon;
+        document.getElementById("locCoordsDisp").textContent = `${lat}, ${lon}`;
+
+        const optCustom = document.getElementById("optCustomGps");
+        optCustom.text = `Current GPS Location (${lat}, ${lon})`;
+        optCustom.dataset.lat = lat;
+        optCustom.dataset.lon = lon;
+        optCustom.selected = true;
+
+        feedback.innerHTML = `<span class="text-success fw-semibold"><i class="bi bi-check-circle-fill"></i> Current Location locked as your Hostel Gate: ${lat}, ${lon}</span>`;
+      },
+      (err) => {
+        feedback.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-circle"></i> GPS Error: ${err.message}</span>`;
+      },
+      { enableHighAccuracy: true }
+    );
+  }
+
+  // 4. Form Validation Before Submit
+  function validateRegistrationForm() {
+    // Check Room Selection
+    const roomSelect = document.getElementById("roomSelect");
+    const manualRoom = document.getElementById("manualRoomNumber").value.trim();
+    if (!roomSelect.value && !manualRoom) {
+      alert("Room Selection Required: Please select your room from the dropdown or enter your room number.");
+      return false;
+    }
+
+    // Check Picture
+    const faceImg = document.getElementById("enrolledFaceInput").value;
+    if (!faceImg) {
+      alert("Student Picture Required: Please snap a live picture or upload your photo before registering.");
+      return false;
+    }
+
+    return true;
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    startRegCamera();
+  });
 </script>
 {% endblock %}
