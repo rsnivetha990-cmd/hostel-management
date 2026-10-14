@@ -67,7 +67,7 @@ class Student(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)
-    student_code = db.Column(db.String(20), unique=True, nullable=False)
+    student_code = db.Column(db.String(20), unique=True, nullable=False, index=True)
     department = db.Column(db.String(80))
     year = db.Column(db.Integer)
     gender = db.Column(db.String(10), default="any")
@@ -128,7 +128,7 @@ class Attendance(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
-    date = db.Column(db.Date, default=lambda: datetime.utcnow().date())
+    date = db.Column(db.Date, default=lambda: datetime.utcnow().date(), index=True)
     time = db.Column(db.DateTime, default=datetime.utcnow)
     qr_id = db.Column(db.Integer, db.ForeignKey("qr_codes.id"))
     status = db.Column(db.String(20), default="Present")
@@ -155,9 +155,9 @@ class Complaint(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
     category = db.Column(db.String(40), nullable=False)
     description = db.Column(db.Text, nullable=False)
-    priority = db.Column(db.String(10), default="Medium")
+    priority = db.Column(db.String(10), default="Medium", index=True)
     date = db.Column(db.DateTime, default=datetime.utcnow)
-    status = db.Column(db.String(20), default="Pending")
+    status = db.Column(db.String(20), default="Pending", index=True)
     assigned_to = db.Column(db.String(120))
     resolved_date = db.Column(db.DateTime)
 
@@ -205,13 +205,13 @@ class Notification(db.Model):
     __tablename__ = "notifications"
 
     id = db.Column(db.Integer, primary_key=True)
-    recipient_role = db.Column(db.String(20), nullable=False)  # "admin" or "warden"
+    recipient_role = db.Column(db.String(20), nullable=False, index=True)  # "admin" or "warden"
     recipient_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     complaint_id = db.Column(db.Integer, db.ForeignKey("complaints.id"), nullable=True)
     title = db.Column(db.String(150), nullable=False)
     message = db.Column(db.Text, nullable=False)
     category = db.Column(db.String(40), default="info")  # "danger", "warning", "info", "success"
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    is_read = db.Column(db.Boolean, default=False)
+    is_read = db.Column(db.Boolean, default=False, index=True)
 
     complaint = db.relationship("Complaint", backref=db.backref("notifications", cascade="all, delete-orphan"))

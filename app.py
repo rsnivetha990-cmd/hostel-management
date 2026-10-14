@@ -95,6 +95,54 @@ def create_app():
         except Exception:
             pass
 
+    @app.after_request
+    def set_security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
+    @app.route("/health", methods=["GET"])
+    @app.route("/api/health", methods=["GET"])
+    def cloud_health():
+        import time, platform
+        t0 = time.time()
+        db_status = "connected"
+        try:
+            db.session.execute(text("SELECT 1"))
+        except Exception as e:
+            db_status = f"unhealthy: {str(e)}"
+        latency_ms = round((time.time() - t0) * 1000, 2)
+
+        has_cloudinary = bool(os.environ.get("CLOUDINARY_CLOUD_NAME"))
+        storage_type = "Cloudinary CDN (SaaS)" if has_cloudinary else "Local Secure File Storage"
+
+        return jsonify({
+            "status": "healthy" if "unhealthy" not in db_status else "degraded",
+            "service": "Smart Hostel Management Cloud Service",
+            "version": "2.4.0",
+            "timestamp": datetime.utcnow().isoformat(),
+            "cloud_infrastructure": {
+                "platform": "Cloud PaaS (Linux Container)",
+                "python_version": platform.python_version(),
+                "database": {
+                    "type": "PostgreSQL" if "postgres" in app.config["SQLALCHEMY_DATABASE_URI"] else "SQLite",
+                    "status": db_status,
+                    "query_latency_ms": latency_ms,
+                },
+                "object_storage": storage_type,
+                "geofence_active": True,
+                "biometrics_active": True,
+            },
+            "metrics": {
+                "total_students": Student.query.count(),
+                "active_rooms": Room.query.count(),
+                "today_attendances": Attendance.query.filter_by(date=date.today()).count(),
+                "pending_complaints": Complaint.query.filter(Complaint.status != "Resolved").count(),
+            }
+        })
+
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
