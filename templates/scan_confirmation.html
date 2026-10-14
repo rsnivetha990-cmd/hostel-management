@@ -48,7 +48,36 @@
               </span>
             </td>
           </tr>
+          <tr>
+            <th class="text-muted small">Verification</th>
+            <td>
+              <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                <i class="bi bi-shield-check"></i> {{ attendance.verification_status or 'Verified' }}
+              </span>
+            </td>
+          </tr>
+          {% if attendance.distance_meters is not none %}
+          <tr>
+            <th class="text-muted small">GPS Distance</th>
+            <td><i class="bi bi-geo-alt-fill text-danger"></i> {{ attendance.distance_meters }}m from hostel entrance</td>
+          </tr>
+          {% endif %}
+          {% if attendance.device_name %}
+          <tr>
+            <th class="text-muted small">Device Used</th>
+            <td><i class="bi bi-phone text-primary"></i> {{ attendance.device_name }}</td>
+          </tr>
+          {% endif %}
         </table>
+
+        {% if attendance.face_snapshot %}
+          <div class="border-top pt-3 mt-3 text-center">
+            <small class="text-muted d-block mb-2">Live Verification Snapshot:</small>
+            <img src="{{ attendance.face_snapshot }}" alt="Live Face Snapshot" 
+                 class="img-thumbnail rounded-circle shadow-sm" 
+                 style="width:90px; height:90px; object-fit: cover;">
+          </div>
+        {% endif %}
       </div>
 
       <a href="{{ url_for('student_dashboard') }}" class="btn btn-primary mt-4">

@@ -73,6 +73,11 @@ class Student(db.Model):
     gender = db.Column(db.String(10), default="any")
     room_id = db.Column(db.Integer, db.ForeignKey("rooms.id"), nullable=True)
 
+    # --- Anti-Proxy Verifications ---
+    trusted_device_id = db.Column(db.String(120), nullable=True)
+    trusted_device_name = db.Column(db.String(120), nullable=True)
+    enrolled_face_image = db.Column(db.Text, nullable=True)
+
     attendances = db.relationship("Attendance", backref="student", lazy=True)
     complaints = db.relationship("Complaint", backref="student", lazy=True)
 
@@ -84,6 +89,7 @@ class Student(db.Model):
             "department": self.department,
             "year": self.year,
             "room": self.room.room_number if self.room else None,
+            "trusted_device": self.trusted_device_name or "Not Registered",
         }
 
 
@@ -96,14 +102,16 @@ class QRCode(db.Model):
     expiry_time = db.Column(db.DateTime, nullable=False)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
     session_label = db.Column(db.String(40), default="General")
+    rotation_interval = db.Column(db.Integer, default=60)
 
     @staticmethod
-    def generate(validity_seconds=180, created_by=None, session_label="General"):
+    def generate(validity_seconds=60, created_by=None, session_label="General"):
         qr = QRCode(
             token=secrets.token_urlsafe(16),
             expiry_time=datetime.utcnow() + timedelta(seconds=validity_seconds),
             created_by=created_by,
             session_label=session_label,
+            rotation_interval=validity_seconds,
         )
         db.session.add(qr)
         db.session.commit()
@@ -123,6 +131,16 @@ class Attendance(db.Model):
     time = db.Column(db.DateTime, default=datetime.utcnow)
     qr_id = db.Column(db.Integer, db.ForeignKey("qr_codes.id"))
     status = db.Column(db.String(20), default="Present")
+
+    # --- Combined Verification Pillars ---
+    verification_status = db.Column(db.String(80), default="Verified")
+    device_id = db.Column(db.String(120), nullable=True)
+    device_name = db.Column(db.String(120), nullable=True)
+    latitude = db.Column(db.Float, nullable=True)
+    longitude = db.Column(db.Float, nullable=True)
+    distance_meters = db.Column(db.Float, nullable=True)
+    face_verified = db.Column(db.Boolean, default=False)
+    face_snapshot = db.Column(db.Text, nullable=True)
 
     __table_args__ = (
         db.UniqueConstraint("student_id", "date", name="uix_student_date"),

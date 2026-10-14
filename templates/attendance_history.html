@@ -2,26 +2,53 @@
 {% block title %}Attendance History{% endblock %}
 {% block content %}
 <h4 class="mb-3"><i class="bi bi-calendar-check"></i> My Attendance History</h4>
-<div class="card p-3">
-  <table class="table">
-    <thead>
-      <tr><th>Date</th><th>Time</th><th>Status</th></tr>
-    </thead>
-    <tbody>
-      {% for r in records %}
+<div class="card p-3 shadow-sm">
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead class="table-light">
         <tr>
-          <td>{{ r.date.strftime('%d-%m-%Y') }}</td>
-          <td>{{ r.time.strftime('%I:%M %p') }}</td>
-          <td>
-            <span class="badge {{ 'bg-success' if r.status == 'Present' else 'bg-warning text-dark' }}">
-              {{ r.status }}
-            </span>
-          </td>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Status</th>
+          <th>Verification Pillars</th>
+          <th>Device Used</th>
+          <th>Face Verified</th>
         </tr>
-      {% else %}
-        <tr><td colspan="3" class="text-muted text-center">No records yet.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% for r in records %}
+          <tr>
+            <td class="fw-semibold">{{ r.date.strftime('%d-%m-%Y') }}</td>
+            <td class="text-muted small">{{ r.time.strftime('%I:%M %p') }}</td>
+            <td>
+              <span class="badge {{ 'bg-success' if r.status == 'Present' else 'bg-warning text-dark' }}">
+                {{ r.status }}
+              </span>
+            </td>
+            <td>
+              <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                <i class="bi bi-shield-check"></i> {{ r.verification_status or 'Verified' }}
+              </span>
+              {% if r.distance_meters is not none %}
+                <small class="text-muted d-block mt-1"><i class="bi bi-geo-alt-fill text-danger"></i> {{ r.distance_meters }}m from entrance</small>
+              {% endif %}
+            </td>
+            <td class="small text-muted">
+              {{ r.device_name or 'Registered Device' }}
+            </td>
+            <td>
+              {% if r.face_snapshot %}
+                <img src="{{ r.face_snapshot }}" alt="Live Face" class="rounded-circle border" style="width:36px; height:36px; object-fit: cover;">
+              {% else %}
+                <i class="bi bi-check-circle-fill text-success" title="Verified"></i>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="text-muted text-center py-4">No attendance records yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

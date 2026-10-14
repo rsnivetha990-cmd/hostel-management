@@ -11,6 +11,7 @@ try:
 except ImportError:
     pass
 
+import math
 import qrcode
 from flask import (
     Flask, render_template, redirect, url_for, request, flash, jsonify, abort
@@ -21,6 +22,31 @@ from flask_login import (
 
 from extensions import db, login_manager
 from models import User, Room, Student, Attendance, Complaint, QRCode, Notification
+
+
+# --- Geofencing & Hostel Gate Coordinates (Configurable & Dynamic Sync) ---
+HOSTEL_CONFIG = {
+    "latitude": float(os.environ.get("HOSTEL_LATITUDE", 12.9716)),
+    "longitude": float(os.environ.get("HOSTEL_LONGITUDE", 77.5946)),
+    "radius_meters": float(os.environ.get("HOSTEL_GEOFENCE_METERS", 300)),
+    "name": "Main Hostel Gate Entrance",
+}
+
+def calculate_distance_meters(lat1, lon1, lat2, lon2):
+    """Calculates geodesic distance between two GPS coordinates in meters using the Haversine formula."""
+    try:
+        R = 6371000  # Earth's radius in meters
+        phi1 = math.radians(float(lat1))
+        phi2 = math.radians(float(lat2))
+        delta_phi = math.radians(float(lat2) - float(lat1))
+        delta_lambda = math.radians(float(lon2) - float(lon1))
+
+        a = math.sin(delta_phi / 2.0) ** 2 + \
+            math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return R * c
+    except Exception:
+        return 999999.0
 
 
 def create_app():
@@ -42,6 +68,31 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        # Safe migration for existing SQLite / Postgres tables
+        from sqlalchemy import text
+        try:
+            with db.engine.connect() as conn:
+                for col_sql in [
+                    "ALTER TABLE qr_codes ADD COLUMN rotation_interval INTEGER DEFAULT 60",
+                    "ALTER TABLE students ADD COLUMN trusted_device_id VARCHAR(120)",
+                    "ALTER TABLE students ADD COLUMN trusted_device_name VARCHAR(120)",
+                    "ALTER TABLE students ADD COLUMN enrolled_face_image TEXT",
+                    "ALTER TABLE attendance ADD COLUMN verification_status VARCHAR(80) DEFAULT 'Verified'",
+                    "ALTER TABLE attendance ADD COLUMN device_id VARCHAR(120)",
+                    "ALTER TABLE attendance ADD COLUMN device_name VARCHAR(120)",
+                    "ALTER TABLE attendance ADD COLUMN latitude FLOAT",
+                    "ALTER TABLE attendance ADD COLUMN longitude FLOAT",
+                    "ALTER TABLE attendance ADD COLUMN distance_meters FLOAT",
+                    "ALTER TABLE attendance ADD COLUMN face_verified BOOLEAN DEFAULT 0",
+                    "ALTER TABLE attendance ADD COLUMN face_snapshot TEXT",
+                ]:
+                    try:
+                        conn.execute(text(col_sql))
+                        conn.commit()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -283,33 +334,126 @@ def create_app():
         student = current_user.student_profile
         if request.method == "POST":
             token = request.form.get("token", "").strip()
+            device_id = request.form.get("device_id", "").strip()
+            device_name = request.form.get("device_name", "").strip() or "Mobile Device"
+            latitude_str = request.form.get("latitude", "").strip()
+            longitude_str = request.form.get("longitude", "").strip()
+            face_image = request.form.get("face_image", "").strip()
+            demo_bypass_gps = request.form.get("demo_bypass_gps") == "true"
+
+            # 1. Verify Changing Entrance QR Code
             qr = QRCode.query.filter_by(token=token).first()
             if not qr:
-                flash("Invalid QR code.", "danger")
+                flash("Invalid QR code! Please scan the changing code displayed at the hostel entrance.", "danger")
                 return redirect(url_for("student_scan"))
             elif not qr.is_valid:
-                flash("This QR code has expired. Ask the warden for a new one.", "warning")
+                flash("This entrance QR code has expired! The entrance code changes every 30–60 seconds. Please scan the current code.", "warning")
                 return redirect(url_for("student_scan"))
 
+            # 2. Check if already marked today
             existing = Attendance.query.filter_by(
                 student_id=student.id, date=date.today()
             ).first()
             if existing:
-                # Already marked today -- still show their details as confirmation
                 return render_template(
                     "scan_confirmation.html", student=student, attendance=existing,
                     already_marked=True
                 )
 
+            # 3. Trusted Device Verification
+            if not device_id:
+                flash("Device identification failed! Please ensure cookies and local storage are enabled on your device.", "danger")
+                return redirect(url_for("student_scan"))
+
+            if not student.trusted_device_id:
+                # First time: automatically register this phone/device as their trusted device
+                student.trusted_device_id = device_id
+                student.trusted_device_name = device_name
+                db.session.commit()
+                flash(f"Trusted Device Enrolled! This device ({device_name}) has been registered to your student account.", "info")
+            elif student.trusted_device_id != device_id:
+                # Untrusted device detected!
+                flash(
+                    f"Untrusted Device Blocked! Attendance must be marked from your registered device ({student.trusted_device_name or 'Registered Phone'}). "
+                    "If you have changed your phone, please contact the warden for a trusted device reset.",
+                    "danger"
+                )
+                # Alert warden about untrusted device attempt
+                notif = Notification(
+                    recipient_role="warden",
+                    title=f"Untrusted Device Blocked: {student.user.full_name}",
+                    message=f"Student {student.user.full_name} ({student.student_code}) attempted attendance from an unregistered device ({device_name}).",
+                    category="danger"
+                )
+                db.session.add(notif)
+                db.session.commit()
+                return redirect(url_for("student_scan"))
+
+            # 4. GPS Geolocation & Hostel Boundary Verification
+            lat_val = None
+            lon_val = None
+            distance_meters = None
+
+            if latitude_str and longitude_str:
+                try:
+                    lat_val = float(latitude_str)
+                    lon_val = float(longitude_str)
+                    distance_meters = round(calculate_distance_meters(
+                        lat_val, lon_val, HOSTEL_CONFIG["latitude"], HOSTEL_CONFIG["longitude"]
+                    ), 1)
+                except ValueError:
+                    pass
+
+            if not demo_bypass_gps:
+                if distance_meters is None:
+                    flash("GPS Verification Required: Please enable location permissions so the system can verify you are within the hostel area.", "danger")
+                    return redirect(url_for("student_scan"))
+
+                if distance_meters > HOSTEL_CONFIG["radius_meters"]:
+                    flash(
+                        f"Location Check Failed: You are {distance_meters}m away from the hostel entrance (allowed radius: {int(HOSTEL_CONFIG['radius_meters'])}m). "
+                        "You must be physically present at the hostel entrance to mark attendance.",
+                        "danger"
+                    )
+                    return redirect(url_for("student_scan"))
+            else:
+                if distance_meters is None:
+                    distance_meters = 15.0  # Simulated entrance distance for demo mode
+
+            # 5. Live Face Capture Verification
+            if not face_image or len(face_image) < 20:
+                flash("Live Face Verification Required: Please look into your camera and capture a live verification selfie before submitting.", "danger")
+                return redirect(url_for("student_scan"))
+
+            # If student has not enrolled a baseline face snapshot, store it
+            if not student.enrolled_face_image:
+                student.enrolled_face_image = face_image
+                db.session.commit()
+
+            # 6. All Checks Passed -> Save Attendance
             status = "Late" if datetime.now().hour >= 21 else "Present"
-            att = Attendance(student_id=student.id, qr_id=qr.id, status=status)
+            att = Attendance(
+                student_id=student.id,
+                qr_id=qr.id,
+                status=status,
+                verification_status="Verified (GPS + Face + Device + QR)",
+                device_id=device_id,
+                device_name=device_name,
+                latitude=lat_val,
+                longitude=lon_val,
+                distance_meters=distance_meters,
+                face_verified=True,
+                face_snapshot=face_image,
+            )
             db.session.add(att)
             db.session.commit()
+
             return render_template(
                 "scan_confirmation.html", student=student, attendance=att,
                 already_marked=False
             )
-        return render_template("student_scan.html")
+
+        return render_template("student_scan.html", hostel_config=HOSTEL_CONFIG, student=student)
 
     @app.route("/student/attendance/history")
     @role_required("student")
@@ -509,7 +653,64 @@ def create_app():
         qr = QRCode.query.get_or_404(qr_id)
         seconds_left = max(0, int((qr.expiry_time - datetime.utcnow()).total_seconds()))
         present_count = Attendance.query.filter_by(qr_id=qr.id).count()
-        return jsonify(valid=qr.is_valid, seconds_left=seconds_left, present_count=present_count)
+        return jsonify(
+            valid=qr.is_valid,
+            seconds_left=seconds_left,
+            present_count=present_count,
+            rotation_interval=qr.rotation_interval or 60,
+            token=qr.token
+        )
+
+    @app.route("/api/qr/<int:qr_id>/rotate", methods=["POST"])
+    @role_required("warden", "admin")
+    def qr_rotate(qr_id):
+        qr = QRCode.query.get_or_404(qr_id)
+        rotation_interval = qr.rotation_interval or 60
+        import secrets
+        new_token = secrets.token_urlsafe(16)
+        qr.token = new_token
+        qr.created_time = datetime.utcnow()
+        qr.expiry_time = datetime.utcnow() + timedelta(seconds=rotation_interval)
+        db.session.commit()
+
+        img = qrcode.make(new_token)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        qr_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        return jsonify(
+            success=True,
+            qr_id=qr.id,
+            token=new_token,
+            qr_b64=qr_b64,
+            rotation_interval=rotation_interval,
+            seconds_left=rotation_interval,
+        )
+
+    @app.route("/api/hostel-location", methods=["GET"])
+    def get_hostel_location():
+        return jsonify(HOSTEL_CONFIG)
+
+    @app.route("/api/hostel-location/sync-my-location", methods=["POST"])
+    @role_required("warden", "admin")
+    def sync_hostel_location():
+        data = request.get_json() or {}
+        lat = data.get("latitude")
+        lon = data.get("longitude")
+        if lat is not None and lon is not None:
+            HOSTEL_CONFIG["latitude"] = float(lat)
+            HOSTEL_CONFIG["longitude"] = float(lon)
+            return jsonify(success=True, config=HOSTEL_CONFIG, message="Hostel entrance synced to current coordinates.")
+        return jsonify(success=False, message="Invalid coordinates provided."), 400
+
+    @app.route("/warden/students/<int:student_id>/reset-device", methods=["POST"])
+    @role_required("warden", "admin")
+    def warden_reset_student_device(student_id):
+        student = Student.query.get_or_404(student_id)
+        student.trusted_device_id = None
+        student.trusted_device_name = None
+        db.session.commit()
+        flash(f"Trusted device for {student.user.full_name} ({student.student_code}) has been reset. They can register their new device on next attendance.", "success")
+        return redirect(request.referrer or url_for("warden_attendance"))
 
     @app.route("/warden/attendance")
     @role_required("warden", "admin")

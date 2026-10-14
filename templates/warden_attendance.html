@@ -13,41 +13,95 @@
 </form>
 
 <div class="row g-4">
-  <div class="col-md-6">
-    <div class="card p-3">
-      <h5 class="text-success"><i class="bi bi-check-circle"></i> Present ({{ present_records|length }})</h5>
-      <table class="table table-sm">
-        <thead><tr><th>Student</th><th>Time</th><th>Status</th></tr></thead>
-        <tbody>
-        {% for r in present_records %}
-          <tr>
-            <td>{{ r.student.user.full_name }} ({{ r.student.student_code }})</td>
-            <td>{{ r.time.strftime('%I:%M %p') }}</td>
-            <td><span class="badge {{ 'bg-success' if r.status=='Present' else 'bg-warning text-dark' }}">{{ r.status }}</span></td>
-          </tr>
-        {% else %}
-          <tr><td colspan="3" class="text-muted text-center">No attendance yet.</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
+  <div class="col-lg-7">
+    <div class="card p-3 shadow-sm">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="text-success mb-0"><i class="bi bi-check-circle-fill"></i> Present Students ({{ present_records|length }})</h5>
+        <span class="badge bg-success-subtle text-success border border-success-subtle">Anti-Proxy Verified</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Student</th>
+              <th>Time / Status</th>
+              <th>Verification Audit</th>
+              <th>Face Snapshot</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for r in present_records %}
+            <tr>
+              <td>
+                <span class="fw-semibold">{{ r.student.user.full_name }}</span>
+                <small class="text-muted d-block">{{ r.student.student_code }} ({{ r.student.room.room_number if r.student.room else 'No room' }})</small>
+              </td>
+              <td>
+                <span class="badge {{ 'bg-success' if r.status=='Present' else 'bg-warning text-dark' }}">{{ r.status }}</span>
+                <small class="text-muted d-block">{{ r.time.strftime('%I:%M %p') }}</small>
+              </td>
+              <td>
+                <div class="small">
+                  {% if r.distance_meters is not none %}
+                    <span class="badge bg-light text-dark border me-1"><i class="bi bi-geo-alt-fill text-danger"></i> {{ r.distance_meters }}m</span>
+                  {% endif %}
+                  {% if r.device_name %}
+                    <span class="badge bg-light text-dark border"><i class="bi bi-phone text-primary"></i> {{ r.device_name }}</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                {% if r.face_snapshot %}
+                  <img src="{{ r.face_snapshot }}" alt="Face Snapshot" class="rounded-circle border" style="width:36px; height:36px; object-fit: cover;" title="Verified live face capture">
+                {% else %}
+                  <span class="text-muted small">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4" class="text-muted text-center py-3">No attendance recorded yet today.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
-  <div class="col-md-6">
-    <div class="card p-3">
-      <h5 class="text-danger"><i class="bi bi-x-circle"></i> Absent ({{ absentees|length }})</h5>
-      <table class="table table-sm">
-        <thead><tr><th>Student</th><th>Room</th></tr></thead>
-        <tbody>
-        {% for s in absentees %}
-          <tr>
-            <td>{{ s.user.full_name }} ({{ s.student_code }})</td>
-            <td>{{ s.room.room_number if s.room else '—' }}</td>
-          </tr>
-        {% else %}
-          <tr><td colspan="2" class="text-muted text-center">Everyone present!</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
+
+  <div class="col-lg-5">
+    <div class="card p-3 shadow-sm mb-4">
+      <h5 class="text-danger mb-2"><i class="bi bi-x-circle-fill"></i> Absent Students ({{ absentees|length }})</h5>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead class="table-light">
+            <tr><th>Student</th><th>Room</th><th>Device Binding</th></tr>
+          </thead>
+          <tbody>
+          {% for s in absentees %}
+            <tr>
+              <td>
+                <span class="fw-semibold">{{ s.user.full_name }}</span>
+                <small class="text-muted d-block">{{ s.student_code }}</small>
+              </td>
+              <td>{{ s.room.room_number if s.room else '—' }}</td>
+              <td>
+                {% if s.trusted_device_name %}
+                  <form method="POST" action="{{ url_for('warden_reset_student_device', student_id=s.id) }}" class="d-inline">
+                    <span class="badge bg-secondary mb-1 d-block" style="font-size:0.7rem;">{{ s.trusted_device_name }}</span>
+                    <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-2" style="font-size:0.7rem;" title="Reset device if student changed phone" onclick="return confirm('Reset trusted device for this student?');">
+                      Reset Device
+                    </button>
+                  </form>
+                {% else %}
+                  <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Not Bound</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="3" class="text-muted text-center py-3">All hostel residents present!</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
