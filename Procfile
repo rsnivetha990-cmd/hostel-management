@@ -1,1 +1,1 @@
-web: gunicorn app:app
+web: python seed.py && gunicorn app:app

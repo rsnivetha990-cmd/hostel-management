@@ -45,20 +45,22 @@ with app.app_context():
     db.session.flush()
 
     students_data = [
-        ("nivetha", "Nivetha S", "ST001", "CSE", 2, "female", rooms[3]),
-        ("priya",   "Priya R",   "ST002", "ECE", 2, "female", rooms[3]),
-        ("arun",    "Arun Kumar","ST003", "CSE", 3, "male",   rooms[0]),
-        ("suresh",  "Suresh M",  "ST004", "MECH",1, "male",   rooms[0]),
-        ("divya",   "Divya K",   "ST005", "IT",  2, "female", None),
+        # (username, name, code, dept, year, gender, room, bed_number)
+        ("nivetha", "Nivetha S", "ST001", "CSE", 2, "female", rooms[3], 1),
+        ("priya",   "Priya R",   "ST002", "ECE", 2, "female", rooms[3], 2),
+        ("arun",    "Arun Kumar","ST003", "CSE", 3, "male",   rooms[0], 1),
+        ("suresh",  "Suresh M",  "ST004", "MECH",1, "male",   rooms[0], 2),
+        ("divya",   "Divya K",   "ST005", "IT",  2, "female", None,     None),
     ]
-    for username, name, code, dept, year, gender, room in students_data:
+    for username, name, code, dept, year, gender, room, bed_num in students_data:
         u = User(username=username, role="student", full_name=name, email=f"{username}@hostel.edu")
         u.set_password("student123")
         db.session.add(u)
         db.session.flush()
         s = Student(
             user_id=u.id, student_code=code, department=dept,
-            year=year, gender=gender, room_id=room.id if room else None
+            year=year, gender=gender, room_id=room.id if room else None,
+            bed_number=bed_num
         )
         db.session.add(s)
 
