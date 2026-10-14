@@ -1,6 +1,7 @@
 """Run once to create tables and load sample data.
-   Usage: python seed.py
+   Usage: python seed.py [--force]
 """
+import sys
 from datetime import datetime, timedelta
 from app import create_app
 from extensions import db
@@ -8,8 +9,16 @@ from models import User, Room, Student, Complaint
 
 app = create_app()
 
+force_seed = "--force" in sys.argv
+
 with app.app_context():
-    db.drop_all()
+    if not force_seed and User.query.filter_by(username="admin").first():
+        print("Database already initialized with admin user. Skipping seed to preserve existing records.")
+        sys.exit(0)
+
+    if force_seed:
+        db.drop_all()
+
     db.create_all()
 
     admin = User(username="admin", role="admin", full_name="Hostel Admin", email="admin@hostel.edu")

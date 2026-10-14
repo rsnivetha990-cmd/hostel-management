@@ -56,9 +56,7 @@ def create_app():
     # Cloud database URL support (Neon.tech / Supabase / Render PostgreSQL)
     db_url = os.environ.get("DATABASE_URL", "sqlite:///hostel.db")
     if db_url.startswith("postgres://"):
-        db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
-    elif db_url.startswith("postgresql://"):
-        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
     app.config["SQLALCHEMY_DATABASE_URI"] = db_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB max upload
@@ -516,6 +514,7 @@ def create_app():
             status = "Late" if datetime.now().hour >= 21 else "Present"
             att = Attendance(
                 student_id=student.id,
+                date=date.today(),
                 qr_id=None,
                 status=status,
                 verification_status="Verified (Device + GPS + Live Face)",
@@ -1020,4 +1019,6 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    debug_mode = os.environ.get("FLASK_ENV") == "development"
+    app.run(debug=debug_mode, host="0.0.0.0", port=port)

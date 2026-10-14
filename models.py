@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import secrets
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -128,7 +128,7 @@ class Attendance(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
-    date = db.Column(db.Date, default=lambda: datetime.utcnow().date(), index=True)
+    date = db.Column(db.Date, default=date.today, index=True)
     time = db.Column(db.DateTime, default=datetime.utcnow)
     qr_id = db.Column(db.Integer, db.ForeignKey("qr_codes.id"))
     status = db.Column(db.String(20), default="Present")
