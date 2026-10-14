@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Complaint Management{% endblock %}
+{% block content %}
+<h4 class="mb-3"><i class="bi bi-tools"></i> Complaint Management</h4>
+
+<div class="btn-group mb-3">
+  <a href="?status=all" class="btn btn-sm btn-outline-secondary {{ 'active' if status_filter=='all' }}">All</a>
+  <a href="?status=Pending" class="btn btn-sm btn-outline-secondary {{ 'active' if status_filter=='Pending' }}">Pending</a>
+  <a href="?status=In Progress" class="btn btn-sm btn-outline-secondary {{ 'active' if status_filter=='In Progress' }}">In Progress</a>
+  <a href="?status=Resolved" class="btn btn-sm btn-outline-secondary {{ 'active' if status_filter=='Resolved' }}">Resolved</a>
+</div>
+
+<div class="card p-3">
+  <table class="table">
+    <thead>
+      <tr><th>Student</th><th>Category</th><th>Description</th><th>Priority</th><th>Status</th><th>Action</th></tr>
+    </thead>
+    <tbody>
+      {% for c in complaints %}
+      <tr class="{{ 'table-danger' if c.escalated_by_keyword }}">
+        <td>
+          {% if c.is_anonymous %}
+            <span class="text-muted"><i class="bi bi-incognito"></i> Anonymous</span>
+          {% else %}
+            {{ c.student.user.full_name }}
+          {% endif %}
+        </td>
+        <td>{{ c.category }}</td>
+        <td class="small">
+          <div>{{ c.description[:60] }}{{ '...' if c.description|length > 60 }}</div>
+          {% if c.image_url %}
+            <div class="mt-1">
+              <a href="{{ c.image_url }}" target="_blank" class="badge bg-light text-primary border text-decoration-none">
+                <i class="bi bi-camera"></i> Photo Evidence
+              </a>
+            </div>
+          {% endif %}
+        </td>
+        <td>
+          <span class="badge badge-priority-{{ c.priority }}">{{ c.priority }}</span>
+          {% if c.escalated_by_keyword %}<div class="small text-danger fw-bold">⚠ auto-escalated</div>{% endif %}
+        </td>
+        <td>
+          <span class="badge {{ 'bg-success' if c.status == 'Resolved' else ('bg-info' if c.status == 'In Progress' else 'bg-secondary') }}">
+            {{ c.status }}
+          </span>
+        </td>
+        <td>
+          <form method="POST" action="{{ url_for('warden_update_complaint', complaint_id=c.id) }}" class="d-flex gap-1">
+            <select name="status" class="form-select form-select-sm" style="width:120px;">
+              <option value="Pending" {{ 'selected' if c.status=='Pending' }}>Pending</option>
+              <option value="In Progress" {{ 'selected' if c.status=='In Progress' }}>In Progress</option>
+              <option value="Resolved" {{ 'selected' if c.status=='Resolved' }}>Resolved</option>
+            </select>
+            <input type="text" name="assigned_to" class="form-control form-control-sm" placeholder="Assign to" value="{{ c.assigned_to or '' }}" style="width:110px;">
+            <button type="submit" class="btn btn-sm btn-primary">Save</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-muted text-center">No complaints found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

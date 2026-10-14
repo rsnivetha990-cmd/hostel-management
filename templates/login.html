@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Login - Smart Hostel{% endblock %}
+{% block content %}
+<div class="login-wrapper">
+  <div class="card login-card shadow-lg">
+    <div class="card-body p-4 p-md-5">
+      <div class="text-center mb-4">
+        <i class="bi bi-building text-primary" style="font-size:2.5rem;"></i>
+        <h3 class="mt-2 mb-0 fw-bold">Smart Hostel</h3>
+        <p class="text-muted small">QR Attendance &middot; Rooms &middot; Complaints</p>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST">
+        <div class="mb-3">
+          <label class="form-label">Username</label>
+          <input type="text" class="form-control" name="username" required autofocus>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-control" name="password" required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100 py-2">Login</button>
+      </form>
+
+      <hr>
+      <p class="small text-muted mb-1">Demo accounts (seeded):</p>
+      <ul class="small text-muted mb-0">
+        <li>admin / admin123</li>
+        <li>warden / warden123</li>
+        <li>nivetha / student123</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

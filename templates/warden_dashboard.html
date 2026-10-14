@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Warden Dashboard{% endblock %}
+{% block content %}
+<h3 class="mb-4">Warden Dashboard</h3>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3 col-6">
+    <div class="stat-card bg-grad-indigo">
+      <div class="small">Total Students</div>
+      <div class="stat-value">{{ total_students }}</div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="stat-card bg-grad-green">
+      <div class="small">Present Today</div>
+      <div class="stat-value">{{ today_present }}</div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="stat-card bg-grad-orange">
+      <div class="small">Pending Complaints</div>
+      <div class="stat-value">{{ pending_complaints }}</div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="stat-card bg-grad-red">
+      <div class="small">Full Rooms</div>
+      <div class="stat-value">{{ full_rooms|length }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h5><i class="bi bi-qr-code"></i> QR Attendance</h5>
+      <p class="text-muted">Generate a new dynamic QR code for today's attendance session.</p>
+      <a href="{{ url_for('warden_generate_qr') }}" class="btn btn-primary">Generate QR Code</a>
+      {% if active_qr %}
+        <a href="{{ url_for('warden_qr_display', qr_id=active_qr.id) }}" class="btn btn-outline-secondary mt-2">
+          View Last QR ({{ active_qr.session_label }})
+        </a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h5><i class="bi bi-door-closed"></i> Rooms at Full Capacity</h5>
+      {% if full_rooms %}
+        <ul class="list-group list-group-flush">
+          {% for r in full_rooms %}
+            <li class="list-group-item d-flex justify-content-between">
+              <span>{{ r.room_number }} ({{ r.block }})</span>
+              <span class="badge bg-danger">Full</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-muted">No rooms at full capacity.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

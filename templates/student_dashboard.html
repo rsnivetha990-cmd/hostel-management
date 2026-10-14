@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Student Dashboard{% endblock %}
+{% block content %}
+<h3 class="mb-4">Welcome, {{ current_user.full_name }} 👋</h3>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3 col-6">
+    <div class="stat-card bg-grad-indigo">
+      <div class="small">Room</div>
+      <div class="stat-value">{{ student.room.room_number if student.room else '—' }}</div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="stat-card bg-grad-green">
+      <div class="small">Today's Attendance</div>
+      <div class="stat-value" style="font-size:1.3rem;">
+        {% if today_attendance %}
+          <i class="bi bi-check-circle"></i> {{ today_attendance.status }}
+        {% else %}
+          <i class="bi bi-x-circle"></i> Not marked
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="stat-card bg-grad-orange">
+      <div class="small">Department</div>
+      <div class="stat-value" style="font-size:1.3rem;">{{ student.department or '—' }}</div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="stat-card bg-grad-blue">
+      <div class="small">Year</div>
+      <div class="stat-value">{{ student.year or '—' }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card p-3 h-100">
+      <h5><i class="bi bi-people"></i> Roommates</h5>
+      {% if roommates %}
+        <ul class="list-group list-group-flush">
+          {% for r in roommates %}
+            <li class="list-group-item">{{ r.user.full_name }} ({{ r.student_code }})</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-muted">No roommates assigned yet.</p>
+      {% endif %}
+      {% if not today_attendance %}
+      <a href="{{ url_for('student_scan') }}" class="btn btn-primary mt-3">
+        <i class="bi bi-qr-code-scan"></i> Mark Attendance
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card p-3 h-100">
+      <h5><i class="bi bi-chat-square-text"></i> Recent Complaints</h5>
+      {% if recent_complaints %}
+        <ul class="list-group list-group-flush">
+          {% for c in recent_complaints %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>{{ c.category }}</span>
+              <span class="badge bg-secondary">{{ c.status }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-muted">No complaints submitted.</p>
+      {% endif %}
+      <a href="{{ url_for('student_complaints') }}" class="btn btn-outline-primary mt-3">
+        <i class="bi bi-plus-circle"></i> New Complaint
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Attendance History{% endblock %}
+{% block content %}
+<h4 class="mb-3"><i class="bi bi-calendar-check"></i> My Attendance History</h4>
+<div class="card p-3">
+  <table class="table">
+    <thead>
+      <tr><th>Date</th><th>Time</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for r in records %}
+        <tr>
+          <td>{{ r.date.strftime('%d-%m-%Y') }}</td>
+          <td>{{ r.time.strftime('%I:%M %p') }}</td>
+          <td>
+            <span class="badge {{ 'bg-success' if r.status == 'Present' else 'bg-warning text-dark' }}">
+              {{ r.status }}
+            </span>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3" class="text-muted text-center">No records yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}QR Code{% endblock %}
+{% block content %}
+<div class="row justify-content-center text-center">
+  <div class="col-md-6">
+    <div class="card p-4 qr-box">
+      <h4 class="mb-1">{{ qr.session_label }}</h4>
+      <p class="text-muted">Display this at the hostel entrance for students to scan.</p>
+      <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code">
+      <div class="mt-4">
+        <span class="badge bg-secondary fs-6" id="countdown">Loading...</span>
+      </div>
+      <div class="mt-2">
+        <span class="badge bg-success fs-6" id="presentCount">0 marked present</span>
+      </div>
+      <a href="{{ url_for('warden_generate_qr') }}" class="btn btn-outline-primary mt-4">
+        <i class="bi bi-arrow-repeat"></i> Generate New QR
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const qrId = {{ qr.id }};
+  function poll() {
+    fetch(`/api/qr/${qrId}/status`)
+      .then(r => r.json())
+      .then(data => {
+        const cd = document.getElementById('countdown');
+        const pc = document.getElementById('presentCount');
+        pc.textContent = `${data.present_count} marked present`;
+        if (data.valid) {
+          const m = Math.floor(data.seconds_left / 60);
+          const s = data.seconds_left % 60;
+          cd.textContent = `Expires in ${m}:${s.toString().padStart(2,'0')}`;
+          cd.className = 'badge bg-primary fs-6';
+        } else {
+          cd.textContent = 'Expired';
+          cd.className = 'badge bg-danger fs-6';
+        }
+      });
+  }
+  poll();
+  setInterval(poll, 2000);
+</script>
+{% endblock %}

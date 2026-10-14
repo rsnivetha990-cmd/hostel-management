@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Attendance Monitoring{% endblock %}
+{% block content %}
+<h4 class="mb-3"><i class="bi bi-calendar-week"></i> Attendance Monitoring</h4>
+
+<form method="GET" class="row g-2 mb-3">
+  <div class="col-auto">
+    <input type="date" name="date" class="form-control" value="{{ selected_date }}">
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-outline-primary">View</button>
+  </div>
+</form>
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h5 class="text-success"><i class="bi bi-check-circle"></i> Present ({{ present_records|length }})</h5>
+      <table class="table table-sm">
+        <thead><tr><th>Student</th><th>Time</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for r in present_records %}
+          <tr>
+            <td>{{ r.student.user.full_name }} ({{ r.student.student_code }})</td>
+            <td>{{ r.time.strftime('%I:%M %p') }}</td>
+            <td><span class="badge {{ 'bg-success' if r.status=='Present' else 'bg-warning text-dark' }}">{{ r.status }}</span></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="text-muted text-center">No attendance yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h5 class="text-danger"><i class="bi bi-x-circle"></i> Absent ({{ absentees|length }})</h5>
+      <table class="table table-sm">
+        <thead><tr><th>Student</th><th>Room</th></tr></thead>
+        <tbody>
+        {% for s in absentees %}
+          <tr>
+            <td>{{ s.user.full_name }} ({{ s.student_code }})</td>
+            <td>{{ s.room.room_number if s.room else '—' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="2" class="text-muted text-center">Everyone present!</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

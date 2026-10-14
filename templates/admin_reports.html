@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<h4 class="mb-3"><i class="bi bi-bar-chart"></i> Reports & Analytics</h4>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4 col-6">
+    <div class="stat-card bg-grad-orange">
+      <div class="small">Avg. Complaint Rating</div>
+      <div class="stat-value" style="font-size:1.6rem;">
+        {% if avg_rating %}{{ avg_rating }} <i class="bi bi-star-fill" style="font-size:1rem;"></i>{% else %}—{% endif %}
+      </div>
+      <div class="small">{{ rated_count }} rated</div>
+    </div>
+  </div>
+  <div class="col-md-4 col-6">
+    <div class="stat-card bg-grad-red">
+      <div class="small">Auto-Escalated (Emergency)</div>
+      <div class="stat-value">{{ emergency_escalations }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-7">
+    <div class="card p-3">
+      <h6>Attendance — Last 7 Days</h6>
+      <canvas id="attendanceChart" height="180"></canvas>
+    </div>
+  </div>
+  <div class="col-md-5">
+    <div class="card p-3">
+      <h6>Complaints by Category</h6>
+      <canvas id="complaintChart" height="180"></canvas>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+new Chart(document.getElementById('attendanceChart'), {
+  type: 'line',
+  data: {
+    labels: {{ labels|tojson }},
+    datasets: [{
+      label: 'Present',
+      data: {{ present_counts|tojson }},
+      borderColor: '#4f46e5',
+      backgroundColor: 'rgba(79,70,229,0.15)',
+      fill: true,
+      tension: 0.3
+    }]
+  },
+  options: { scales: { y: { beginAtZero: true, suggestedMax: {{ total_students }} } } }
+});
+
+new Chart(document.getElementById('complaintChart'), {
+  type: 'doughnut',
+  data: {
+    labels: {{ complaint_categories.keys()|list|tojson }},
+    datasets: [{
+      data: {{ complaint_categories.values()|list|tojson }},
+      backgroundColor: ['#6366f1','#22c55e','#fb923c','#38bdf8','#f472b6','#f87171','#eab308','#14b8a6','#a855f7']
+    }]
+  }
+});
+</script>
+{% endblock %}

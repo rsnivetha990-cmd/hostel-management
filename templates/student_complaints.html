@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Complaints{% endblock %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-md-5">
+    <div class="card p-3">
+      <h5><i class="bi bi-pencil-square"></i> Submit a Complaint</h5>
+      <form method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label class="form-label">Category</label>
+          <select name="category" class="form-select" required>
+            {% for cat in categories %}
+              <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea name="description" class="form-control" rows="3" placeholder="Describe the issue..." required></textarea>
+          <div class="form-text">Safety-related keywords (fire, spark, leak, harassment) automatically flag this as Emergency.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Attach Photo Evidence <span class="badge bg-secondary">Cloud Storage</span></label>
+          <input type="file" name="photo" class="form-control" accept="image/*">
+          <div class="form-text">Optional: Upload an image of the damage/issue (stored securely in Cloud Storage).</div>
+        </div>
+        <div class="form-check mb-3">
+          <input type="checkbox" class="form-check-input" name="is_anonymous" id="anonCheck">
+          <label class="form-check-label" for="anonCheck">
+            Submit anonymously <span class="text-muted small">(your name is hidden from the warden's list)</span>
+          </label>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Submit Complaint</button>
+      </form>
+    </div>
+  </div>
+  <div class="col-md-7">
+    <div class="card p-3">
+      <h5><i class="bi bi-list-check"></i> My Complaints</h5>
+      <table class="table">
+        <thead><tr><th>Category</th><th>Priority</th><th>Status</th><th>Date</th><th>Evidence</th><th>Rating</th></tr></thead>
+        <tbody>
+          {% for c in complaints %}
+          <tr>
+            <td>
+              {{ c.category }}
+              {% if c.is_anonymous %}<i class="bi bi-incognito text-muted" title="Submitted anonymously"></i>{% endif %}
+            </td>
+            <td><span class="badge badge-priority-{{ c.priority }}">{{ c.priority }}</span>
+              {% if c.escalated_by_keyword %}<div class="small text-danger">auto-escalated</div>{% endif %}
+            </td>
+            <td>
+              <span class="badge {{ 'bg-success' if c.status == 'Resolved' else ('bg-info' if c.status == 'In Progress' else 'bg-secondary') }}">
+                {{ c.status }}
+              </span>
+            </td>
+            <td>{{ c.date.strftime('%d-%m-%Y') }}</td>
+            <td>
+              {% if c.image_url %}
+                <a href="{{ c.image_url }}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.8rem;">
+                  <i class="bi bi-image"></i> Photo
+                </a>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if c.status == 'Resolved' %}
+                {% if c.rating %}
+                  <span class="text-warning">{{ '★' * c.rating }}{{ '☆' * (5 - c.rating) }}</span>
+                {% else %}
+                  <form method="POST" action="{{ url_for('student_rate_complaint', complaint_id=c.id) }}" class="d-flex gap-1">
+                    <select name="rating" class="form-select form-select-sm" style="width:70px;" required>
+                      <option value="">--</option>
+                      {% for i in range(1,6) %}<option value="{{ i }}">{{ i }} ★</option>{% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Rate</button>
+                  </form>
+                {% endif %}
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-muted text-center">No complaints yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

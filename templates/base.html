@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Smart Hostel Management System{% endblock %}</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+{% if current_user.is_authenticated %}
+<nav class="navbar navbar-expand-lg navbar-dark app-navbar">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold" href="/">
+      <i class="bi bi-building"></i> Smart Hostel
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMenu">
+      <ul class="navbar-nav me-auto">
+        {% if current_user.role == 'student' %}
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('student_dashboard') }}">Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('student_scan') }}">Scan QR</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('student_attendance_history') }}">Attendance</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('student_complaints') }}">Complaints</a></li>
+        {% elif current_user.role == 'warden' %}
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_dashboard') }}">Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_generate_qr') }}">Generate QR</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_attendance') }}">Attendance</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_rooms') }}">Rooms</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_complaints') }}">Complaints</a></li>
+        {% elif current_user.role == 'admin' %}
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_dashboard') }}">Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_students') }}">Students</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_rooms') }}">Rooms</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_complaints') }}">Complaints</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_reports') }}">Reports</a></li>
+        {% endif %}
+      </ul>
+      <span class="navbar-text text-white-50 me-3">
+        <i class="bi bi-person-circle"></i> {{ current_user.full_name }}
+        <span class="badge bg-light text-dark ms-1">{{ current_user.role }}</span>
+      </span>
+      <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">Logout</a>
+    </div>
+  </div>
+</nav>
+{% endif %}
+
+<div class="container py-4">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
