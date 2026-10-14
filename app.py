@@ -80,6 +80,81 @@ def create_app():
             flash("Invalid username or password.", "danger")
         return render_template("login.html")
 
+    @app.route("/register", methods=["GET", "POST"])
+    def register():
+        if current_user.is_authenticated:
+            return redirect_to_dashboard()
+
+        # Authorized member registration code (default: HOSTEL2026, can also be configured via HOSTEL_REGISTRATION_CODE)
+        valid_codes = {"HOSTEL2026", "SHMS2026"}
+        custom_code = os.environ.get("HOSTEL_REGISTRATION_CODE")
+        if custom_code:
+            valid_codes.add(custom_code.strip().upper())
+
+        if request.method == "POST":
+            reg_code = request.form.get("registration_code", "").strip().upper()
+            full_name = request.form.get("full_name", "").strip()
+            student_code = request.form.get("student_code", "").strip().upper()
+            department = request.form.get("department", "").strip()
+            year = int(request.form.get("year") or 1)
+            gender = request.form.get("gender", "female").strip().lower()
+            email = request.form.get("email", "").strip()
+            phone = request.form.get("phone", "").strip()
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "")
+            confirm_password = request.form.get("confirm_password", "")
+
+            # 1. Constraint: Verify registration code
+            if reg_code not in valid_codes:
+                flash("Invalid registration code! Only authorized hostel members with a valid code can register.", "danger")
+                return render_template("register.html")
+
+            # 2. Constraint: Password length & confirmation
+            if len(password) < 6:
+                flash("Password must be at least 6 characters long.", "warning")
+                return render_template("register.html")
+
+            if password != confirm_password:
+                flash("Passwords do not match. Please verify and try again.", "warning")
+                return render_template("register.html")
+
+            # 3. Constraint: Check username uniqueness
+            if User.query.filter_by(username=username).first():
+                flash("This username is already taken. Please choose another.", "warning")
+                return render_template("register.html")
+
+            # 4. Constraint: Check student_code uniqueness
+            if Student.query.filter_by(student_code=student_code).first():
+                flash(f"Student code '{student_code}' is already registered.", "warning")
+                return render_template("register.html")
+
+            # Create User and Student profile
+            user = User(
+                username=username,
+                role="student",
+                full_name=full_name,
+                email=email or None,
+                phone=phone or None,
+            )
+            user.set_password(password)
+            db.session.add(user)
+            db.session.flush()
+
+            student = Student(
+                user_id=user.id,
+                student_code=student_code,
+                department=department,
+                year=year,
+                gender=gender,
+            )
+            db.session.add(student)
+            db.session.commit()
+
+            flash("Registration successful! You can now log in with your credentials.", "success")
+            return redirect(url_for("login"))
+
+        return render_template("register.html")
+
     @app.route("/logout")
     @login_required
     def logout():

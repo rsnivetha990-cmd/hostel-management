@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Register - Smart Hostel{% endblock %}
+{% block content %}
+<div class="login-wrapper">
+  <div class="card register-card shadow-lg">
+    <div class="card-body p-4 p-md-5">
+      <div class="text-center mb-4">
+        <i class="bi bi-building-add text-primary" style="font-size:2.5rem;"></i>
+        <h3 class="mt-2 mb-0 fw-bold">Hostel Registration</h3>
+        <p class="text-muted small">Authorized Member Onboarding</p>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST">
+        <!-- Constraint: Authorized Member Registration Code -->
+        <div class="mb-3 p-3 bg-light rounded-3 border border-primary border-opacity-25">
+          <label class="form-label fw-bold text-primary mb-1">
+            <i class="bi bi-shield-lock-fill me-1"></i> Authorized Registration Code
+          </label>
+          <input type="text" class="form-control form-control-lg border-primary" 
+                 name="registration_code" required 
+                 placeholder="Enter Member Code (e.g. HOSTEL2026)" 
+                 autocomplete="off" autofocus>
+          <div class="form-text small text-muted">
+            <i class="bi bi-info-circle"></i> Only students with a valid code provided by the hostel office can register.
+          </div>
+        </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-md-7">
+            <label class="form-label">Full Name</label>
+            <input type="text" class="form-control" name="full_name" required placeholder="e.g. Jane Doe">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Student ID / Roll No</label>
+            <input type="text" class="form-control" name="student_code" required placeholder="e.g. ST010">
+          </div>
+        </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-md-5">
+            <label class="form-label">Department</label>
+            <input type="text" class="form-control" name="department" required placeholder="e.g. CSE, ECE">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Year</label>
+            <select class="form-select" name="year" required>
+              <option value="1">1st</option>
+              <option value="2" selected>2nd</option>
+              <option value="3">3rd</option>
+              <option value="4">4th</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Gender</label>
+            <select class="form-select" name="gender" required>
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-md-6">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" name="email" placeholder="student@hostel.edu">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Phone Number</label>
+            <input type="tel" class="form-control" name="phone" placeholder="9876543210">
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Username</label>
+          <input type="text" class="form-control" name="username" required placeholder="Choose a unique username">
+        </div>
+
+        <div class="row g-2 mb-4">
+          <div class="col-md-6">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-control" name="password" required placeholder="Min 6 characters">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Confirm Password</label>
+            <input type="password" class="form-control" name="confirm_password" required placeholder="Re-enter password">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+          <i class="bi bi-person-check me-1"></i> Register & Create Account
+        </button>
+      </form>
+
+      <div class="text-center mt-4 pt-3 border-top">
+        <p class="small text-muted mb-0">
+          Already have an account?
+          <a href="{{ url_for('login') }}" class="fw-semibold text-primary text-decoration-none">Login here</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

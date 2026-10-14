@@ -44,12 +44,20 @@ body {
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, var(--brand), #0ea5e9);
+  padding: 2.5rem 1rem;
 }
 
 .login-card {
   border-radius: 18px;
   overflow: hidden;
   max-width: 420px;
+  width: 100%;
+}
+
+.register-card {
+  border-radius: 18px;
+  overflow: hidden;
+  max-width: 560px;
   width: 100%;
 }
 
