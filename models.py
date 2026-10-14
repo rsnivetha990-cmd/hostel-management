@@ -180,3 +180,19 @@ class Complaint(db.Model):
     def display_name(self):
         """Name shown to warden -- hidden if the complaint was filed anonymously."""
         return "Anonymous" if self.is_anonymous else self.student.user.full_name
+
+
+class Notification(db.Model):
+    __tablename__ = "notifications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    recipient_role = db.Column(db.String(20), nullable=False)  # "admin" or "warden"
+    recipient_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaints.id"), nullable=True)
+    title = db.Column(db.String(150), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    category = db.Column(db.String(40), default="info")  # "danger", "warning", "info", "success"
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_read = db.Column(db.Boolean, default=False)
+
+    complaint = db.relationship("Complaint", backref=db.backref("notifications", cascade="all, delete-orphan"))

@@ -20,7 +20,7 @@ from flask_login import (
 )
 
 from extensions import db, login_manager
-from models import User, Room, Student, Attendance, Complaint, QRCode
+from models import User, Room, Student, Attendance, Complaint, QRCode, Notification
 
 
 def create_app():
@@ -37,9 +37,11 @@ def create_app():
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB max upload
 
-
     db.init_app(app)
     login_manager.init_app(app)
+
+    with app.app_context():
+        db.create_all()
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -56,6 +58,86 @@ def create_app():
                 return f(*args, **kwargs)
             return wrapped
         return decorator
+
+    @app.context_processor
+    def inject_notifications():
+        if current_user.is_authenticated and current_user.role in ["admin", "warden"]:
+            notifs = (
+                Notification.query.filter_by(recipient_role=current_user.role)
+                .order_by(Notification.created_at.desc())
+                .limit(10)
+                .all()
+            )
+            unread_count = Notification.query.filter_by(
+                recipient_role=current_user.role, is_read=False
+            ).count()
+            return dict(user_notifications=notifs, unread_notifications_count=unread_count)
+        return dict(user_notifications=[], unread_notifications_count=0)
+
+    def send_complaint_notifications(complaint, event_type="raised", student_rating=None, custom_msg=None):
+        """
+        Sends notifications for a complaint:
+        - Admin ALWAYS receives notifications.
+        - Warden receives notification ONLY IF complaint was NOT submitted anonymously (is_anonymous == False).
+        """
+        student_name = "Anonymous Student" if complaint.is_anonymous else complaint.student.user.full_name
+        student_code = "" if complaint.is_anonymous else f" ({complaint.student.student_code})"
+
+        if event_type == "raised":
+            badge = f"[{complaint.priority} Priority]"
+            title = f"New Complaint #{complaint.id}: {complaint.category} {badge}"
+            body = f"{student_name}{student_code} submitted a {complaint.priority} priority complaint in {complaint.category}: \"{complaint.description[:90]}\""
+            cat = "danger" if complaint.priority in ["Emergency", "High"] else "info"
+
+        elif event_type == "not_resolved":
+            title = f"Complaint #{complaint.id} Reopened (Not Resolved)"
+            rating_text = f" Student rating: {student_rating}/5 stars." if student_rating else ""
+            body = f"{student_name}{student_code} reported that Complaint #{complaint.id} ({complaint.category}) is NOT RESOLVED.{rating_text} Status automatically reset to Pending."
+            cat = "warning"
+
+        elif event_type == "resolved":
+            title = f"Complaint #{complaint.id} Confirmed Resolved"
+            rating_text = f" Rating: {student_rating}/5 stars." if student_rating else ""
+            body = f"{student_name}{student_code} confirmed Complaint #{complaint.id} ({complaint.category}) is RESOLVED.{rating_text}"
+            cat = "success"
+
+        else:
+            title = f"Update on Complaint #{complaint.id}"
+            body = custom_msg or f"Complaint #{complaint.id} status updated."
+            cat = "info"
+
+        # 1. Admin ALWAYS receives the notification
+        admin_notif = Notification(
+            recipient_role="admin",
+            complaint_id=complaint.id,
+            title=title,
+            message=body,
+            category=cat,
+        )
+        db.session.add(admin_notif)
+
+        # 2. Warden receives notification ONLY if NOT anonymous
+        if not complaint.is_anonymous:
+            warden_notif = Notification(
+                recipient_role="warden",
+                complaint_id=complaint.id,
+                title=title,
+                message=body,
+                category=cat,
+            )
+            db.session.add(warden_notif)
+
+        db.session.commit()
+
+    @app.route("/notifications/mark-all-read")
+    @login_required
+    def mark_all_notifications_read():
+        if current_user.role in ["admin", "warden"]:
+            Notification.query.filter_by(recipient_role=current_user.role, is_read=False).update(
+                {"is_read": True}
+            )
+            db.session.commit()
+        return redirect(request.referrer or url_for("index"))
 
     # =========================================================
     # AUTH
@@ -305,19 +387,23 @@ def create_app():
                     category=category,
                     description=description,
                     priority=priority,
+                    status="Pending",
                     is_anonymous=is_anonymous,
                     escalated_by_keyword=escalated,
                     image_url=image_url,
                 )
                 db.session.add(complaint)
                 db.session.commit()
+
+                # Trigger automatic notifications: Admin receives all, Warden receives only if NOT anonymous
+                send_complaint_notifications(complaint, event_type="raised")
+
                 if escalated:
                     flash(
-                        "Complaint submitted and flagged as EMERGENCY based on your description. "
-                        "The warden has been notified immediately.", "danger"
+                        "Complaint submitted and flagged as EMERGENCY. Admin has been notified immediately.", "danger"
                     )
                 else:
-                    flash("Complaint submitted successfully.", "success")
+                    flash("Complaint submitted with Pending status. Admin has received the notification.", "success")
             return redirect(url_for("student_complaints"))
         complaints = (
             Complaint.query.filter_by(student_id=student.id)
@@ -329,22 +415,48 @@ def create_app():
             "student_complaints.html", complaints=complaints, categories=categories
         )
 
-    @app.route("/student/complaints/<int:complaint_id>/rate", methods=["POST"])
+    @app.route("/student/complaints/<int:complaint_id>/update-status", methods=["POST"])
     @role_required("student")
-    def student_rate_complaint(complaint_id):
+    def student_update_complaint_status(complaint_id):
         student = current_user.student_profile
         complaint = Complaint.query.get_or_404(complaint_id)
         if complaint.student_id != student.id:
             abort(403)
-        if complaint.status != "Resolved":
-            flash("You can only rate a complaint once it's resolved.", "warning")
-            return redirect(url_for("student_complaints"))
-        rating = int(request.form.get("rating", 0))
-        if 1 <= rating <= 5:
+
+        new_status = request.form.get("status")  # "Resolved" or "Not Resolved"
+        rating_val = request.form.get("rating")
+        rating = int(rating_val) if (rating_val and rating_val.isdigit() and 1 <= int(rating_val) <= 5) else None
+
+        if rating:
             complaint.rating = rating
+
+        if new_status == "Not Resolved":
+            # Automatically turn status as Pending and notify admin
+            complaint.status = "Pending"
+            complaint.resolved_date = None
             db.session.commit()
-            flash("Thanks for your feedback!", "success")
+
+            send_complaint_notifications(complaint, event_type="not_resolved", student_rating=rating)
+            flash(
+                f"Complaint #{complaint.id} marked as Not Resolved. Status automatically reset to Pending and sent to Admin.",
+                "warning",
+            )
+        elif new_status == "Resolved":
+            complaint.status = "Resolved"
+            complaint.resolved_date = datetime.utcnow()
+            db.session.commit()
+
+            send_complaint_notifications(complaint, event_type="resolved", student_rating=rating)
+            flash(f"Complaint #{complaint.id} marked as Resolved. Thank you for rating!", "success")
+        else:
+            flash("Please select whether the issue is Resolved or Not Resolved.", "danger")
+
         return redirect(url_for("student_complaints"))
+
+    @app.route("/student/complaints/<int:complaint_id>/rate", methods=["POST"])
+    @role_required("student")
+    def student_rate_complaint(complaint_id):
+        return student_update_complaint_status(complaint_id)
 
     # =========================================================
     # WARDEN MODULE

@@ -2,12 +2,12 @@
 {% block title %}Complaints{% endblock %}
 {% block content %}
 <div class="row g-4">
-  <div class="col-md-5">
-    <div class="card p-3">
-      <h5><i class="bi bi-pencil-square"></i> Submit a Complaint</h5>
+  <div class="col-lg-4">
+    <div class="card p-3 shadow-sm">
+      <h5><i class="bi bi-pencil-square text-primary"></i> Submit a Complaint</h5>
       <form method="POST" enctype="multipart/form-data">
         <div class="mb-3">
-          <label class="form-label">Category</label>
+          <label class="form-label fw-semibold">Category</label>
           <select name="category" class="form-select" required>
             {% for cat in categories %}
               <option value="{{ cat }}">{{ cat }}</option>
@@ -15,78 +15,105 @@
           </select>
         </div>
         <div class="mb-3">
-          <label class="form-label">Description</label>
-          <textarea name="description" class="form-control" rows="3" placeholder="Describe the issue..." required></textarea>
-          <div class="form-text">Safety-related keywords (fire, spark, leak, harassment) automatically flag this as Emergency.</div>
+          <label class="form-label fw-semibold">Description</label>
+          <textarea name="description" class="form-control" rows="3" placeholder="Describe the issue in detail..." required></textarea>
+          <div class="form-text small">Safety keywords (fire, spark, leak, harassment) automatically escalate to Emergency.</div>
         </div>
         <div class="mb-3">
-          <label class="form-label">Attach Photo Evidence <span class="badge bg-secondary">Cloud Storage</span></label>
+          <label class="form-label fw-semibold">Attach Photo Evidence <span class="badge bg-secondary">Cloud Storage</span></label>
           <input type="file" name="photo" class="form-control" accept="image/*">
-          <div class="form-text">Optional: Upload an image of the damage/issue (stored securely in Cloud Storage).</div>
+          <div class="form-text small">Upload an image of the damage/issue (stored securely in Cloud Storage).</div>
         </div>
         <div class="form-check mb-3">
           <input type="checkbox" class="form-check-input" name="is_anonymous" id="anonCheck">
-          <label class="form-check-label" for="anonCheck">
-            Submit anonymously <span class="text-muted small">(your name is hidden from the warden's list)</span>
+          <label class="form-check-label small" for="anonCheck">
+            <strong>Submit anonymously</strong> (Only Admin will be notified; hidden from Warden)
           </label>
         </div>
-        <button type="submit" class="btn btn-primary w-100">Submit Complaint</button>
+        <button type="submit" class="btn btn-primary w-100 fw-semibold">
+          <i class="bi bi-send me-1"></i> Submit Complaint
+        </button>
       </form>
     </div>
   </div>
-  <div class="col-md-7">
-    <div class="card p-3">
-      <h5><i class="bi bi-list-check"></i> My Complaints</h5>
-      <table class="table">
-        <thead><tr><th>Category</th><th>Priority</th><th>Status</th><th>Date</th><th>Evidence</th><th>Rating</th></tr></thead>
-        <tbody>
-          {% for c in complaints %}
-          <tr>
-            <td>
-              {{ c.category }}
-              {% if c.is_anonymous %}<i class="bi bi-incognito text-muted" title="Submitted anonymously"></i>{% endif %}
-            </td>
-            <td><span class="badge badge-priority-{{ c.priority }}">{{ c.priority }}</span>
-              {% if c.escalated_by_keyword %}<div class="small text-danger">auto-escalated</div>{% endif %}
-            </td>
-            <td>
-              <span class="badge {{ 'bg-success' if c.status == 'Resolved' else ('bg-info' if c.status == 'In Progress' else 'bg-secondary') }}">
-                {{ c.status }}
-              </span>
-            </td>
-            <td>{{ c.date.strftime('%d-%m-%Y') }}</td>
-            <td>
-              {% if c.image_url %}
-                <a href="{{ c.image_url }}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.8rem;">
-                  <i class="bi bi-image"></i> Photo
-                </a>
-              {% else %}
-                <span class="text-muted small">—</span>
-              {% endif %}
-            </td>
-            <td>
-              {% if c.status == 'Resolved' %}
-                {% if c.rating %}
-                  <span class="text-warning">{{ '★' * c.rating }}{{ '☆' * (5 - c.rating) }}</span>
-                {% else %}
-                  <form method="POST" action="{{ url_for('student_rate_complaint', complaint_id=c.id) }}" class="d-flex gap-1">
-                    <select name="rating" class="form-select form-select-sm" style="width:70px;" required>
-                      <option value="">--</option>
-                      {% for i in range(1,6) %}<option value="{{ i }}">{{ i }} ★</option>{% endfor %}
-                    </select>
-                    <button type="submit" class="btn btn-sm btn-outline-primary">Rate</button>
-                  </form>
+  <div class="col-lg-8">
+    <div class="card p-3 shadow-sm">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="mb-0"><i class="bi bi-list-check text-primary"></i> My Complaints</h5>
+        <span class="badge bg-light text-dark border">Auto-Alert Admin Active</span>
+      </div>
+      <p class="small text-muted mb-3">
+        <i class="bi bi-info-circle text-primary"></i> As the complaint owner, you can mark whether an issue is <strong>Resolved</strong> or <strong>Not Resolved</strong>. Selecting <em>Not Resolved</em> automatically sets the status back to <strong>Pending</strong> and alerts the Admin.
+      </p>
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Category</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th>Proof</th>
+              <th style="min-width: 220px;">Resolution & Rating</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in complaints %}
+            <tr>
+              <td>
+                <span class="fw-semibold">{{ c.category }}</span>
+                {% if c.is_anonymous %}
+                  <span class="badge bg-dark ms-1" title="Submitted anonymously"><i class="bi bi-incognito"></i> Anon</span>
                 {% endif %}
-              {% else %}
-                <span class="text-muted small">—</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="6" class="text-muted text-center">No complaints yet.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+              </td>
+              <td>
+                <span class="badge badge-priority-{{ c.priority }}">{{ c.priority }}</span>
+                {% if c.escalated_by_keyword %}<div class="small text-danger fw-bold" style="font-size:0.75rem;">⚠ auto-escalated</div>{% endif %}
+              </td>
+              <td>
+                <span class="badge {{ 'bg-success' if c.status == 'Resolved' else ('bg-info text-dark' if c.status == 'In Progress' else 'bg-warning text-dark') }}">
+                  {{ c.status }}
+                </span>
+              </td>
+              <td class="small text-muted">{{ c.date.strftime('%d-%m-%Y') }}</td>
+              <td>
+                {% if c.image_url %}
+                  <a href="{{ c.image_url }}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;">
+                    <i class="bi bi-image"></i> Photo
+                  </a>
+                {% else %}
+                  <span class="text-muted small">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <form method="POST" action="{{ url_for('student_update_complaint_status', complaint_id=c.id) }}">
+                  <div class="input-group input-group-sm mb-1">
+                    <select name="status" class="form-select form-select-sm {{ 'border-success text-success fw-semibold' if c.status == 'Resolved' else 'border-warning text-dark' }}" required>
+                      <option value="Resolved" {{ 'selected' if c.status == 'Resolved' }}>Resolved</option>
+                      <option value="Not Resolved" {{ 'selected' if c.status != 'Resolved' }}>Not Resolved</option>
+                    </select>
+                    <select name="rating" class="form-select form-select-sm" style="max-width:85px;">
+                      <option value="">Rating</option>
+                      {% for i in range(5, 0, -1) %}
+                        <option value="{{ i }}" {{ 'selected' if c.rating == i }}>{{ i }} ★</option>
+                      {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                  </div>
+                  {% if c.rating %}
+                    <div class="small text-warning" style="font-size:0.8rem;">
+                      {{ '★' * c.rating }}{{ '☆' * (5 - c.rating) }} <span class="text-muted">({{ c.rating }}/5)</span>
+                    </div>
+                  {% endif %}
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-muted text-center py-4">No complaints submitted yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
