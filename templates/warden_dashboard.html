@@ -99,19 +99,44 @@
     </div>
   </div>
   <div class="col-md-6">
-    <div class="card p-3">
-      <h5><i class="bi bi-door-closed"></i> Rooms at Full Capacity</h5>
+    <div class="card p-3 shadow-sm h-100">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="mb-0"><i class="bi bi-door-open-fill text-success"></i> Room & Bed Vacancies</h5>
+        <a href="{{ url_for('warden_rooms') }}" class="btn btn-sm btn-outline-success">
+          <i class="bi bi-grid-3x3-gap-fill me-1"></i> Open Bed Matrix
+        </a>
+      </div>
+      <p class="text-muted small mb-3">
+        Track real-time occupancy bed-by-bed. Easily identify empty beds and vacate beds in 1-click.
+      </p>
+      
+      <div class="row g-2 mb-3">
+        <div class="col-6">
+          <div class="p-2 bg-success bg-opacity-10 border border-success rounded text-center">
+            <span class="small text-success fw-bold d-block">Bed Matrix View</span>
+            <span class="badge bg-success">Interactive Grid</span>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="p-2 bg-light border rounded text-center">
+            <span class="small text-muted fw-bold d-block">1-Click Vacate</span>
+            <span class="badge bg-danger">Instant Empty</span>
+          </div>
+        </div>
+      </div>
+
+      <h6 class="small fw-bold text-muted mb-2"><i class="bi bi-door-closed me-1"></i> Rooms at Full Capacity:</h6>
       {% if full_rooms %}
-        <ul class="list-group list-group-flush">
-          {% for r in full_rooms %}
-            <li class="list-group-item d-flex justify-content-between">
-              <span>{{ r.room_number }} ({{ r.block }})</span>
-              <span class="badge bg-danger">Full</span>
+        <ul class="list-group list-group-flush small">
+          {% for r in full_rooms[:4] %}
+            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-1">
+              <span>Room {{ r.room_number }} (Block {{ r.block }})</span>
+              <span class="badge bg-danger-subtle text-danger border border-danger">0 Vacant (Full)</span>
             </li>
           {% endfor %}
         </ul>
       {% else %}
-        <p class="text-muted">No rooms at full capacity.</p>
+        <p class="text-success small mb-0"><i class="bi bi-check-circle me-1"></i> All rooms currently have vacant beds available for allocation.</p>
       {% endif %}
     </div>
   </div>

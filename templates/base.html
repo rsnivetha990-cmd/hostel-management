@@ -28,12 +28,12 @@
         {% elif current_user.role == 'warden' %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_dashboard') }}">Dashboard</a></li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_attendance') }}">Attendance Monitoring</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_rooms') }}">Rooms</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_rooms') }}"><i class="bi bi-door-open me-1"></i> Room & Bed Vacancies</a></li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_complaints') }}">Complaints</a></li>
         {% elif current_user.role == 'admin' %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_dashboard') }}">Dashboard</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_students') }}">Students</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_rooms') }}">Rooms</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_students') }}">Residents</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_rooms') }}"><i class="bi bi-door-open me-1"></i> Room & Bed Vacancies</a></li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('warden_complaints') }}">Complaints</a></li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_reports') }}">Reports</a></li>
         {% endif %}
