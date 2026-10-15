@@ -1,54 +1,42 @@
 {% extends "base.html" %}
-{% block title %}Add Student{% endblock %}
+{% block title %}Add Resident - Smart Hostel{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-6">
-    <div class="card p-4">
-      <h4 class="mb-3"><i class="bi bi-person-plus"></i> Add New Student</h4>
+    <div class="card p-4 shadow-sm border-0">
+      <h4 class="mb-3"><i class="bi bi-person-plus text-primary"></i> Add New Resident</h4>
       <form method="POST">
-        <div class="row g-2">
-          <div class="col-md-6">
-            <label class="form-label small">Full Name</label>
-            <input type="text" name="full_name" class="form-control" required>
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label small fw-semibold">Full Name</label>
+            <input type="text" name="full_name" class="form-control" required placeholder="e.g. Priya R">
           </div>
-          <div class="col-md-6">
-            <label class="form-label small">Student Code</label>
-            <input type="text" name="student_code" class="form-control" placeholder="ST006" required>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small">Username (login)</label>
-            <input type="text" name="username" class="form-control" required>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small">Password</label>
-            <input type="text" name="password" class="form-control" placeholder="default: changeme123">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small">Email</label>
-            <input type="email" name="email" class="form-control">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small">Phone</label>
-            <input type="text" name="phone" class="form-control">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small">Department</label>
-            <input type="text" name="department" class="form-control" placeholder="CSE">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small">Year</label>
-            <input type="number" name="year" class="form-control" min="1" max="5" value="1">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small">Gender</label>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">Gender</label>
             <select name="gender" class="form-select">
-              <option value="male">Male</option>
               <option value="female">Female</option>
+              <option value="male">Male</option>
               <option value="any">Any</option>
             </select>
           </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">Username (login)</label>
+            <input type="text" name="username" class="form-control" required placeholder="Choose username">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">Password</label>
+            <input type="text" name="password" class="form-control" placeholder="default: student123">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">Email (Optional)</label>
+            <input type="email" name="email" class="form-control" placeholder="name@hostel.edu">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">Phone (Optional)</label>
+            <input type="text" name="phone" class="form-control" placeholder="9876543210">
+          </div>
         </div>
-        <button type="submit" class="btn btn-primary w-100 mt-3">Add Student</button>
+        <button type="submit" class="btn btn-primary w-100 mt-4 py-2 fw-semibold">Add Resident</button>
       </form>
     </div>
   </div>

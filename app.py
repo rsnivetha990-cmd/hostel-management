@@ -1031,10 +1031,21 @@ def create_app():
             user.set_password(request.form.get("password") or "changeme123")
             db.session.add(user)
             db.session.flush()
+            student_code = request.form.get("student_code", "").strip().upper()
+            if not student_code:
+                import random
+                for _ in range(50):
+                    cand = f"RES{random.randint(1000, 9999)}"
+                    if not Student.query.filter_by(student_code=cand).first():
+                        student_code = cand
+                        break
+                if not student_code:
+                    student_code = f"RES{int(datetime.utcnow().timestamp()) % 100000}"
+
             student = Student(
                 user_id=user.id,
-                student_code=request.form.get("student_code"),
-                department=request.form.get("department"),
+                student_code=student_code,
+                department=request.form.get("department", "").strip() or "General",
                 year=int(request.form.get("year") or 1),
                 gender=request.form.get("gender", "any"),
             )
