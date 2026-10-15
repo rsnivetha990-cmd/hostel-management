@@ -11,6 +11,17 @@ try:
 except ImportError:
     pass
 
+# Ensure .env is read reliably in all environments
+_env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+if os.path.exists(_env_file):
+    with open(_env_file, "r", encoding="utf-8") as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip().strip("'\""))
+
+
 import math
 import qrcode
 from flask import (
@@ -60,39 +71,54 @@ def create_app():
     app.config["SQLALCHEMY_DATABASE_URI"] = db_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB max upload
+    if "postgres" in db_url:
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+            "pool_pre_ping": True,
+            "pool_recycle": 300,
+        }
 
     db.init_app(app)
     login_manager.init_app(app)
 
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as e:
+            print(f"[DB Notice] create_all deferred: {e}")
+
         # Safe migration for existing SQLite / Postgres tables
         from sqlalchemy import text
         try:
+            is_pg = "postgres" in app.config["SQLALCHEMY_DATABASE_URI"]
+            ts_type = "TIMESTAMP" if is_pg else "DATETIME"
+            bool_type = "BOOLEAN DEFAULT FALSE" if is_pg else "BOOLEAN DEFAULT 0"
+            ine = "IF NOT EXISTS " if is_pg else ""
+
+            migrations = [
+                f"ALTER TABLE qr_codes ADD COLUMN {ine}rotation_interval INTEGER DEFAULT 60",
+                f"ALTER TABLE students ADD COLUMN {ine}trusted_device_id VARCHAR(120)",
+                f"ALTER TABLE students ADD COLUMN {ine}trusted_device_name VARCHAR(120)",
+                f"ALTER TABLE students ADD COLUMN {ine}enrolled_face_image TEXT",
+                f"ALTER TABLE students ADD COLUMN {ine}hostel_location VARCHAR(120)",
+                f"ALTER TABLE students ADD COLUMN {ine}bed_number INTEGER",
+                f"ALTER TABLE users ADD COLUMN {ine}reset_token VARCHAR(100)",
+                f"ALTER TABLE users ADD COLUMN {ine}reset_token_expiry {ts_type}",
+                f"ALTER TABLE attendance ADD COLUMN {ine}verification_status VARCHAR(80) DEFAULT 'Verified'",
+                f"ALTER TABLE attendance ADD COLUMN {ine}device_id VARCHAR(120)",
+                f"ALTER TABLE attendance ADD COLUMN {ine}device_name VARCHAR(120)",
+                f"ALTER TABLE attendance ADD COLUMN {ine}latitude FLOAT",
+                f"ALTER TABLE attendance ADD COLUMN {ine}longitude FLOAT",
+                f"ALTER TABLE attendance ADD COLUMN {ine}distance_meters FLOAT",
+                f"ALTER TABLE attendance ADD COLUMN {ine}face_verified {bool_type}",
+                f"ALTER TABLE attendance ADD COLUMN {ine}face_snapshot TEXT",
+            ]
             with db.engine.connect() as conn:
-                for col_sql in [
-                    "ALTER TABLE qr_codes ADD COLUMN rotation_interval INTEGER DEFAULT 60",
-                    "ALTER TABLE students ADD COLUMN trusted_device_id VARCHAR(120)",
-                    "ALTER TABLE students ADD COLUMN trusted_device_name VARCHAR(120)",
-                    "ALTER TABLE students ADD COLUMN enrolled_face_image TEXT",
-                    "ALTER TABLE students ADD COLUMN hostel_location VARCHAR(120)",
-                    "ALTER TABLE students ADD COLUMN bed_number INTEGER",
-                    "ALTER TABLE users ADD COLUMN reset_token VARCHAR(100)",
-                    "ALTER TABLE users ADD COLUMN reset_token_expiry DATETIME",
-                    "ALTER TABLE attendance ADD COLUMN verification_status VARCHAR(80) DEFAULT 'Verified'",
-                    "ALTER TABLE attendance ADD COLUMN device_id VARCHAR(120)",
-                    "ALTER TABLE attendance ADD COLUMN device_name VARCHAR(120)",
-                    "ALTER TABLE attendance ADD COLUMN latitude FLOAT",
-                    "ALTER TABLE attendance ADD COLUMN longitude FLOAT",
-                    "ALTER TABLE attendance ADD COLUMN distance_meters FLOAT",
-                    "ALTER TABLE attendance ADD COLUMN face_verified BOOLEAN DEFAULT 0",
-                    "ALTER TABLE attendance ADD COLUMN face_snapshot TEXT",
-                ]:
+                for col_sql in migrations:
                     try:
                         conn.execute(text(col_sql))
                         conn.commit()
                     except Exception:
-                        pass
+                        conn.rollback()
         except Exception:
             pass
 
@@ -279,13 +305,13 @@ def create_app():
         """
         Sends an email with the password reset link to user.email.
         If SMTP configuration (MAIL_SERVER, MAIL_USERNAME, etc.) is provided, transmits via live SMTP.
-        Returns a tuple: (was_sent_via_smtp: bool, reset_url: str).
+        Returns a tuple: (was_sent_via_smtp: bool, error_msg: str, reset_url: str).
         """
-        smtp_server = os.environ.get("MAIL_SERVER")
+        smtp_server = os.environ.get("MAIL_SERVER", "").strip()
         smtp_port = int(os.environ.get("MAIL_PORT", 587))
-        smtp_user = os.environ.get("MAIL_USERNAME")
-        smtp_pass = os.environ.get("MAIL_PASSWORD")
-        sender = os.environ.get("MAIL_DEFAULT_SENDER", smtp_user or "noreply@hostel.edu")
+        smtp_user = os.environ.get("MAIL_USERNAME", "").strip()
+        smtp_pass = os.environ.get("MAIL_PASSWORD", "").strip()
+        sender = os.environ.get("MAIL_DEFAULT_SENDER", smtp_user or "noreply@hostel.edu").strip()
 
         subject = "Smart Hostel System - Password Reset Request"
         body = f"""Hello {user.full_name},
@@ -301,6 +327,7 @@ Best regards,
 Smart Hostel Administration Team
 """
         sent = False
+        error_msg = None
         if smtp_server and smtp_user and smtp_pass:
             try:
                 import smtplib
@@ -312,16 +339,24 @@ Smart Hostel Administration Team
                 msg["From"] = sender
                 msg["To"] = user.email
 
-                with smtplib.SMTP(smtp_server, smtp_port, timeout=8) as server:
-                    if os.environ.get("MAIL_USE_TLS", "true").lower() in ["true", "1"]:
-                        server.starttls()
-                    server.login(smtp_user, smtp_pass)
-                    server.send_message(msg)
+                if smtp_port == 465:
+                    with smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=12) as server:
+                        server.login(smtp_user, smtp_pass)
+                        server.send_message(msg)
+                else:
+                    with smtplib.SMTP(smtp_server, smtp_port, timeout=12) as server:
+                        if os.environ.get("MAIL_USE_TLS", "true").lower() in ["true", "1"]:
+                            server.starttls()
+                        server.login(smtp_user, smtp_pass)
+                        server.send_message(msg)
                 sent = True
             except Exception as e:
-                print(f"[Email Notification Error] Could not send via SMTP: {e}")
+                error_msg = str(e)
+                print(f"[Email Notification Error] Could not send via SMTP to {user.email}: {e}")
+        else:
+            error_msg = "SMTP credentials (MAIL_SERVER, MAIL_USERNAME, MAIL_PASSWORD) are not configured in .env."
 
-        return sent, reset_url
+        return sent, error_msg, reset_url
 
     @app.route("/forgot-password", methods=["GET", "POST"])
     def forgot_password():
@@ -338,17 +373,17 @@ Smart Hostel Administration Team
             if user and user.email:
                 token = user.generate_reset_token(expires_in_seconds=3600)
                 reset_url = url_for("reset_password", token=token, _external=True)
-                sent, _ = send_password_reset_email(user, reset_url)
+                sent, error_msg, _ = send_password_reset_email(user, reset_url)
 
                 if sent:
-                    flash(f"A password reset link has been sent to your email ({user.email}). Please check your inbox.", "success")
+                    flash(f"Success! A real password reset link has been dispatched to {user.email}. Please check your inbox (and Spam folder).", "success")
                 else:
-                    flash(f"Password reset link generated for {user.email}! Click the link below to reset your password.", "info")
+                    flash(f"Reset link created for {user.email}. Note: Live internet delivery requires SMTP in .env ({error_msg}). For immediate access, use the link generated below.", "warning")
                     reset_demo_link = reset_url
             elif user and not user.email:
                 flash(f"Account '{user.username}' does not have a registered email address. Please contact the hostel office.", "warning")
             else:
-                flash("If an account associated with that email exists, a password reset link has been sent.", "info")
+                flash(f"No account found matching '{identifier}'. Please check your registered email or username.", "danger")
 
         return render_template("forgot_password.html", reset_demo_link=reset_demo_link)
 
