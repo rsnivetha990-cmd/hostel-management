@@ -77,6 +77,8 @@ def create_app():
                     "ALTER TABLE students ADD COLUMN enrolled_face_image TEXT",
                     "ALTER TABLE students ADD COLUMN hostel_location VARCHAR(120)",
                     "ALTER TABLE students ADD COLUMN bed_number INTEGER",
+                    "ALTER TABLE users ADD COLUMN reset_token VARCHAR(100)",
+                    "ALTER TABLE users ADD COLUMN reset_token_expiry DATETIME",
                     "ALTER TABLE attendance ADD COLUMN verification_status VARCHAR(80) DEFAULT 'Verified'",
                     "ALTER TABLE attendance ADD COLUMN device_id VARCHAR(120)",
                     "ALTER TABLE attendance ADD COLUMN device_name VARCHAR(120)",
@@ -272,6 +274,112 @@ def create_app():
                 return redirect_to_dashboard()
             flash("Invalid username or password.", "danger")
         return render_template("login.html")
+
+    def send_password_reset_email(user, reset_url):
+        """
+        Sends an email with the password reset link to user.email.
+        If SMTP configuration (MAIL_SERVER, MAIL_USERNAME, etc.) is provided, transmits via live SMTP.
+        Returns a tuple: (was_sent_via_smtp: bool, reset_url: str).
+        """
+        smtp_server = os.environ.get("MAIL_SERVER")
+        smtp_port = int(os.environ.get("MAIL_PORT", 587))
+        smtp_user = os.environ.get("MAIL_USERNAME")
+        smtp_pass = os.environ.get("MAIL_PASSWORD")
+        sender = os.environ.get("MAIL_DEFAULT_SENDER", smtp_user or "noreply@hostel.edu")
+
+        subject = "Smart Hostel System - Password Reset Request"
+        body = f"""Hello {user.full_name},
+
+We received a request to reset your password for your Smart Hostel Management System account ({user.username}).
+
+Please click the link below to reset your password:
+{reset_url}
+
+This password reset link will expire in 1 hour. If you did not make this request, you can safely ignore this email.
+
+Best regards,
+Smart Hostel Administration Team
+"""
+        sent = False
+        if smtp_server and smtp_user and smtp_pass:
+            try:
+                import smtplib
+                from email.message import EmailMessage
+
+                msg = EmailMessage()
+                msg.set_content(body)
+                msg["Subject"] = subject
+                msg["From"] = sender
+                msg["To"] = user.email
+
+                with smtplib.SMTP(smtp_server, smtp_port, timeout=8) as server:
+                    if os.environ.get("MAIL_USE_TLS", "true").lower() in ["true", "1"]:
+                        server.starttls()
+                    server.login(smtp_user, smtp_pass)
+                    server.send_message(msg)
+                sent = True
+            except Exception as e:
+                print(f"[Email Notification Error] Could not send via SMTP: {e}")
+
+        return sent, reset_url
+
+    @app.route("/forgot-password", methods=["GET", "POST"])
+    def forgot_password():
+        if current_user.is_authenticated:
+            return redirect_to_dashboard()
+
+        reset_demo_link = None
+        if request.method == "POST":
+            identifier = request.form.get("email_or_username", "").strip()
+            user = User.query.filter(
+                (User.email.ilike(identifier)) | (User.username.ilike(identifier))
+            ).first()
+
+            if user and user.email:
+                token = user.generate_reset_token(expires_in_seconds=3600)
+                reset_url = url_for("reset_password", token=token, _external=True)
+                sent, _ = send_password_reset_email(user, reset_url)
+
+                if sent:
+                    flash(f"A password reset link has been sent to your email ({user.email}). Please check your inbox.", "success")
+                else:
+                    flash(f"Password reset link generated for {user.email}! Click the link below to reset your password.", "info")
+                    reset_demo_link = reset_url
+            elif user and not user.email:
+                flash(f"Account '{user.username}' does not have a registered email address. Please contact the hostel office.", "warning")
+            else:
+                flash("If an account associated with that email exists, a password reset link has been sent.", "info")
+
+        return render_template("forgot_password.html", reset_demo_link=reset_demo_link)
+
+    @app.route("/reset-password/<token>", methods=["GET", "POST"])
+    def reset_password(token):
+        if current_user.is_authenticated:
+            return redirect_to_dashboard()
+
+        user = User.query.filter_by(reset_token=token).first()
+        if not user or not user.verify_reset_token(token):
+            flash("The password reset link is invalid or has expired. Please request a new one.", "danger")
+            return redirect(url_for("forgot_password"))
+
+        if request.method == "POST":
+            password = request.form.get("password", "")
+            confirm_password = request.form.get("confirm_password", "")
+
+            if len(password) < 6:
+                flash("Password must be at least 6 characters long.", "warning")
+                return render_template("reset_password.html", token=token, user=user)
+
+            if password != confirm_password:
+                flash("Passwords do not match. Please verify and try again.", "warning")
+                return render_template("reset_password.html", token=token, user=user)
+
+            user.set_password(password)
+            user.clear_reset_token()
+            flash("Your password has been successfully reset! You can now log in with your new password.", "success")
+            return redirect(url_for("login"))
+
+        return render_template("reset_password.html", token=token, user=user)
 
     @app.route("/register", methods=["GET", "POST"])
     def register():

@@ -15,6 +15,8 @@ class User(UserMixin, db.Model):
     full_name = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120))
     phone = db.Column(db.String(20))
+    reset_token = db.Column(db.String(100), nullable=True)
+    reset_token_expiry = db.Column(db.DateTime, nullable=True)
 
     student_profile = db.relationship(
         "Student", backref="user", uselist=False, cascade="all, delete-orphan"
@@ -25,6 +27,26 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    def generate_reset_token(self, expires_in_seconds=3600):
+        self.reset_token = secrets.token_urlsafe(32)
+        self.reset_token_expiry = datetime.utcnow() + timedelta(seconds=expires_in_seconds)
+        db.session.commit()
+        return self.reset_token
+
+    def verify_reset_token(self, token):
+        if not self.reset_token or not self.reset_token_expiry:
+            return False
+        if self.reset_token != token:
+            return False
+        if datetime.utcnow() > self.reset_token_expiry:
+            return False
+        return True
+
+    def clear_reset_token(self):
+        self.reset_token = None
+        self.reset_token_expiry = None
+        db.session.commit()
 
 
 class Room(db.Model):

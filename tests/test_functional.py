@@ -392,6 +392,53 @@ class TestFunctionalSuite(unittest.TestCase):
         }, follow_redirects=True)
         self.client.get("/logout")
 
+    def test_tc_f14_forgot_password_and_reset_workflow(self):
+        """TC-F14: Forgot password link generation, email trigger, and password reset."""
+        user = User.query.filter_by(username="nivetha").first()
+        self.assertIsNotNone(user)
+        self.assertTrue(bool(user.email))
+
+        # 1. Login page displays Forgot Password link
+        login_res = self.client.get("/login")
+        self.assertEqual(login_res.status_code, 200)
+        self.assertIn(b"Forgot Password?", login_res.data)
+
+        # 2. Request password reset
+        forgot_res = self.client.post("/forgot-password", data={"email_or_username": user.email}, follow_redirects=True)
+        self.assertEqual(forgot_res.status_code, 200)
+
+        # Verify token generated in database
+        db.session.refresh(user)
+        self.assertIsNotNone(user.reset_token)
+        self.assertIsNotNone(user.reset_token_expiry)
+        token = user.reset_token
+
+        # 3. Access reset password page
+        reset_page_res = self.client.get(f"/reset-password/{token}")
+        self.assertEqual(reset_page_res.status_code, 200)
+        self.assertIn(b"Set New Password", reset_page_res.data)
+
+        # 4. Submit new password
+        new_pass = "brandnewpass456"
+        reset_post_res = self.client.post(f"/reset-password/{token}", data={
+            "password": new_pass,
+            "confirm_password": new_pass
+        }, follow_redirects=True)
+        self.assertEqual(reset_post_res.status_code, 200)
+
+        # Token cleared
+        db.session.refresh(user)
+        self.assertIsNone(user.reset_token)
+
+        # 5. Verify login with new password succeeds
+        auth_res = self.client.post("/login", data={"username": "nivetha", "password": new_pass}, follow_redirects=True)
+        self.assertEqual(auth_res.status_code, 200)
+        self.client.get("/logout")
+
+        # Restore original password for other tests
+        user.set_password("student123")
+        db.session.commit()
+
 if __name__ == "__main__":
     unittest.main()
 
